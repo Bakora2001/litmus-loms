@@ -2,11 +2,11 @@ import { pool } from '../db.js';
 
 async function updateAdmin() {
   try {
-    console.log('▶ Updating admin user name in the database to Admin Denism Babu...');
+    console.log('▶ Updating admin user name in the database to Admin Dennis Babu...');
     const res = await pool.query(
       `UPDATE users
-       SET name = 'Admin Denism Babu', role = 'owner'
-       WHERE email = 'admin@litmussolutions.co.ke'
+       SET name = 'Admin Dennis Babu', role = 'owner'
+       WHERE email = 'dennis.babu7106@gmail.com'
        RETURNING id, name, role`
     );
     if (res.rows.length) {
