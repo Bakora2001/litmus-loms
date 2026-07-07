@@ -260,7 +260,7 @@ export default function Invoices() {
             </button>
           </div>
 
-          <div className="card p-0 overflow-hidden">
+          <div className="card p-0 overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-400 uppercase border-b border-gray-100">

@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, LogOut, ClipboardList, AlertTriangle, FileText, CheckCircle2, Sun } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, ClipboardList, AlertTriangle, FileText, CheckCircle2, Sun, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -7,6 +7,7 @@ import api from '../api/client';
 interface TopbarProps {
   title?: string;
   subtitle?: string;
+  onToggleSidebar?: () => void;
 }
 
 interface NotificationItem {
@@ -31,7 +32,7 @@ function getGreeting() {
   return 'Good evening';
 }
 
-export default function Topbar({ title, subtitle }: TopbarProps) {
+export default function Topbar({ title, subtitle, onToggleSidebar }: TopbarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -124,26 +125,35 @@ export default function Topbar({ title, subtitle }: TopbarProps) {
 
   return (
     <header className="sticky top-0 z-20 bg-litmus-bg/95 backdrop-blur border-b border-black/5 shadow-sm">
-      <div className="flex items-center justify-between gap-4 px-6 py-3.5">
+      <div className="flex items-center justify-between gap-4 px-4 md:px-6 py-3.5">
 
-        {/* LEFT — Welcome greeting */}
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
-            <Sun size={13} className="text-amber-400" />
-            {getGreeting()},
+        {/* LEFT — Welcome greeting with hamburger menu */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={onToggleSidebar}
+            className="md:hidden p-2 rounded-lg border border-gray-200 bg-white text-litmus-black hover:bg-gray-50 transition shrink-0"
+            title="Toggle Menu"
+          >
+            <Menu size={18} />
+          </button>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+              <Sun size={13} className="text-amber-400" />
+              {getGreeting()},
+            </div>
+            <div className="text-sm md:text-base font-extrabold text-litmus-black leading-tight truncate">
+              {user?.name || 'Welcome back!'}
+              {title && (
+                <span className="text-gray-300 font-light mx-2">·</span>
+              )}
+              {title && <span className="text-xs md:text-sm font-semibold text-gray-500">{title}</span>}
+            </div>
+            {subtitle && <p className="text-[10px] text-gray-400 mt-0.5 truncate">{subtitle}</p>}
           </div>
-          <div className="text-base font-extrabold text-litmus-black leading-tight truncate">
-            {user?.name || 'Welcome back!'}
-            {title && (
-              <span className="text-gray-300 font-light mx-2">·</span>
-            )}
-            {title && <span className="text-sm font-semibold text-gray-500">{title}</span>}
-          </div>
-          {subtitle && <p className="text-[10px] text-gray-400 mt-0.5 truncate">{subtitle}</p>}
         </div>
 
         {/* RIGHT — Actions */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 md:gap-3 shrink-0">
           {/* Date badge */}
           <div className="hidden md:flex items-center gap-2 bg-litmus-black text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
             <span className="text-gray-400 font-normal text-[10px]">Today</span>
@@ -168,9 +178,9 @@ export default function Topbar({ title, subtitle }: TopbarProps) {
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-black/5 py-2 z-30 overflow-hidden">
+              <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white rounded-xl shadow-lg border border-black/5 py-2 z-30 overflow-hidden">
                 <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                  <span className="text-xs font-bold text-gray-700">Notifications & Reminders</span>
+                  <span className="text-xs font-bold text-gray-700">Notifications</span>
                   {unreadCount > 0 && (
                     <button onClick={clearAll} className="text-[10px] text-litmus-red font-semibold hover:underline">
                       Clear All
@@ -178,33 +188,27 @@ export default function Topbar({ title, subtitle }: TopbarProps) {
                   )}
                 </div>
 
-                <div className="max-h-[300px] overflow-y-auto">
+                <div className="max-h-[250px] overflow-y-auto">
                   {notifications.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-xs text-gray-400 space-y-1">
-                      <CheckCircle2 className="mx-auto text-emerald-500 mb-1" size={24} />
+                    <div className="px-4 py-6 text-center text-xs text-gray-400 space-y-1">
+                      <CheckCircle2 className="mx-auto text-emerald-500 mb-1" size={20} />
                       <div className="font-semibold text-gray-700">All caught up!</div>
-                      <div>No pending tasks or low stock alerts.</div>
                     </div>
                   ) : (
                     notifications.map((item) => (
                       <div
                         key={item.id}
                         onClick={() => handleNotificationClick(item)}
-                        className="px-4 py-3 border-b border-gray-50 hover:bg-gray-50 flex items-start gap-3 cursor-pointer transition"
+                        className="px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer transition"
                       >
                         <div className="mt-0.5 shrink-0">
-                          {item.type === 'stock' && <AlertTriangle size={14} className="text-orange-500" />}
-                          {item.type === 'task' && <ClipboardList size={14} className="text-blue-500" />}
-                          {item.type === 'invoice' && <FileText size={14} className="text-litmus-red" />}
+                          {item.type === 'stock' && <AlertTriangle size={13} className="text-orange-500" />}
+                          {item.type === 'task' && <ClipboardList size={13} className="text-blue-500" />}
+                          {item.type === 'invoice' && <FileText size={13} className="text-litmus-red" />}
                         </div>
-                        <div className="text-[11px] leading-relaxed">
-                          <div className="font-bold text-gray-800 flex items-center gap-1.5">
+                        <div className="text-[10px] leading-relaxed">
+                          <div className="font-bold text-gray-800 flex items-center gap-1">
                             {item.title}
-                            {item.severity === 'high' && (
-                              <span className="bg-red-50 text-red-600 text-[8px] px-1 rounded font-bold uppercase tracking-wider">
-                                Alert
-                              </span>
-                            )}
                           </div>
                           <div className="text-gray-500 mt-0.5">{item.description}</div>
                         </div>
@@ -217,7 +221,7 @@ export default function Topbar({ title, subtitle }: TopbarProps) {
                   onClick={() => { setNotificationsOpen(false); navigate('/tasks'); }}
                   className="px-4 py-2 text-center text-xs font-semibold text-litmus-red hover:bg-red-50/50 cursor-pointer border-t border-gray-100"
                 >
-                  Manage All Tasks →
+                  Manage All Tasks
                 </div>
               </div>
             )}
@@ -227,31 +231,28 @@ export default function Topbar({ title, subtitle }: TopbarProps) {
           <div className="relative">
             <button
               onClick={() => { setMenuOpen((v) => !v); setNotificationsOpen(false); }}
-              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition"
+              className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-white border border-transparent hover:border-gray-200 transition"
             >
               <div className="w-8 h-8 rounded-full bg-litmus-red flex items-center justify-center text-white text-sm font-bold">
                 {(user?.name || 'U').charAt(0)}
               </div>
-              <span className="text-sm font-semibold text-litmus-black hidden sm:block max-w-[100px] truncate">
+              <span className="text-xs font-semibold text-litmus-black hidden sm:block max-w-[70px] truncate">
                 {firstName}
               </span>
-              <ChevronDown size={14} className="text-gray-400" />
+              <ChevronDown size={12} className="text-gray-400" />
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-lg border border-black/5 py-2 z-30">
-                <div className="px-3 py-2.5 border-b border-gray-100">
-                  <div className="text-sm font-bold text-litmus-black truncate">{user?.name}</div>
-                  <div className="text-xs text-gray-400 truncate mt-0.5">{user?.email}</div>
-                  <span className="mt-1.5 inline-block text-[9px] font-bold uppercase tracking-wider bg-litmus-red/10 text-litmus-red px-2 py-0.5 rounded-full">
-                    {user?.role}
-                  </span>
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-black/5 py-2 z-30">
+                <div className="px-3 py-2 border-b border-gray-100">
+                  <div className="text-xs font-bold text-litmus-black truncate">{user?.name}</div>
+                  <div className="text-[10px] text-gray-400 truncate mt-0.5">{user?.email}</div>
                 </div>
                 <button
                   onClick={() => { logout(); navigate('/login'); }}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-litmus-red hover:bg-red-50 mt-1"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-litmus-red hover:bg-red-50 mt-1 text-left"
                 >
-                  <LogOut size={14} />
+                  <LogOut size={13} />
                   Sign out
                 </button>
               </div>

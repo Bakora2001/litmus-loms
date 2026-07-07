@@ -13,11 +13,16 @@ import {
   BarChart3,
   Receipt,
   Settings as SettingsIcon,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import Logo from './Logo';
 
-// Map each nav item to its required permission key (undefined = always visible)
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, permission: undefined },
   { to: '/customers', label: 'Customers', icon: Users, permission: undefined },
@@ -34,23 +39,32 @@ const navItems = [
   { to: '/settings', label: 'Settings', icon: SettingsIcon, permission: 'settings' },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
 
-  // Owner/admin see everything. Other roles are filtered by permissions array.
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const userPermissions: string[] = user?.permissions || [];
 
   const visibleItems = navItems.filter((item) => {
-    if (!item.permission) return true; // always visible (Dashboard, Customers, Tasks, Calendar)
-    if (isOwnerOrAdmin) return true;   // owners/admins bypass filters
+    if (!item.permission) return true;
+    if (isOwnerOrAdmin) return true;
     return userPermissions.includes(item.permission);
   });
 
   return (
-    <aside className="w-64 shrink-0 h-screen sticky top-0 bg-litmus-black flex flex-col">
-      <div className="px-5 py-6 border-b border-white/10">
+    <aside
+      className={`fixed md:sticky top-0 bottom-0 left-0 z-40 w-64 bg-litmus-black flex flex-col transition-transform duration-300 md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      } h-screen shrink-0`}
+    >
+      <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
         <Logo variant="dark" showTagline size="sm" />
+        <button
+          onClick={onClose}
+          className="md:hidden p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -59,6 +73,7 @@ export default function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            onClick={onClose} // Auto-close sidebar on mobile menu navigation click
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
           >
             <item.icon size={18} strokeWidth={2} />
