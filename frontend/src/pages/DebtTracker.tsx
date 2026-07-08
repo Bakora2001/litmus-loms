@@ -70,7 +70,19 @@ export default function DebtTracker() {
 
   async function receivePayment(txId: string, full: boolean, balance: number) {
     const amount = full ? balance : Number(payAmount[txId] || 0);
-    if (!amount || amount <= 0) return;
+    
+    // Validation: Check if amount is valid
+    if (!amount || amount <= 0) {
+      alert('Please enter a valid payment amount greater than zero.');
+      return;
+    }
+    
+    // Validation: Check if payment exceeds balance
+    if (amount > balance) {
+      alert(`Payment amount (${formatMoney(amount)}) cannot exceed the remaining balance (${formatMoney(balance)}). Please enter a valid amount.`);
+      return;
+    }
+    
     setPaying(txId);
     try {
       await api.post(`/transactions/${txId}/payments`, { amount, method: 'cash' });
@@ -78,6 +90,10 @@ export default function DebtTracker() {
       setPaymentHistories((prev) => ({ ...prev, [txId]: data }));
       if (selected) await openCustomer(selected);
       load();
+      // Clear the input field after successful payment
+      setPayAmount((prev) => ({ ...prev, [txId]: '' }));
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Failed to record payment. Please try again.');
     } finally {
       setPaying(null);
     }
@@ -258,43 +274,45 @@ ${items.map(it => {
         <div className="ml-auto text-sm text-gray-400">{debts.length} customer{debts.length !== 1 ? 's' : ''} owe money</div>
       </div>
 
-      <div className="card p-0 overflow-hidden overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
-              <th className="px-5 py-3 font-medium">Customer</th>
-              <th className="px-5 py-3 font-medium">Open Items</th>
-              <th className="px-5 py-3 font-medium">Earliest Due</th>
-              <th className="px-5 py-3 font-medium">Balance</th>
-              <th className="px-5 py-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {debts.map((d) => (
-              <tr key={d.customer_id} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer" onClick={() => openCustomer(d)}>
-                <td className="px-5 py-3.5">
-                  <div className="font-medium text-litmus-black">{d.name || 'Unnamed'}</div>
-                  <div className="text-xs text-gray-400">{d.phone}</div>
-                </td>
-                <td className="px-5 py-3.5 text-gray-500">{d.open_items}</td>
-                <td className="px-5 py-3.5 text-gray-500">{formatDate(d.earliest_due_date)}</td>
-                <td className="px-5 py-3.5 font-semibold text-litmus-red">{formatMoney(d.total_balance)}</td>
-                <td className="px-5 py-3.5 text-right"><ChevronRight size={16} className="text-gray-300 inline" /></td>
+      <div className="card p-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
+            <thead>
+              <tr className="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
+                <th className="px-5 py-3 font-medium">Customer</th>
+                <th className="px-5 py-3 font-medium">Open Items</th>
+                <th className="px-5 py-3 font-medium">Earliest Due</th>
+                <th className="px-5 py-3 font-medium">Balance</th>
+                <th className="px-5 py-3 font-medium"></th>
               </tr>
-            ))}
-            {!loading && debts.length === 0 && (
-              <tr><td colSpan={5} className="text-center text-gray-400 py-10">No outstanding debts. Great job! 🎉</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {debts.map((d) => (
+                <tr key={d.customer_id} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer" onClick={() => openCustomer(d)}>
+                  <td className="px-5 py-3.5">
+                    <div className="font-medium text-litmus-black">{d.name || 'Unnamed'}</div>
+                    <div className="text-xs text-gray-400">{d.phone}</div>
+                  </td>
+                  <td className="px-5 py-3.5 text-gray-500">{d.open_items}</td>
+                  <td className="px-5 py-3.5 text-gray-500">{formatDate(d.earliest_due_date)}</td>
+                  <td className="px-5 py-3.5 font-semibold text-litmus-red">{formatMoney(d.total_balance)}</td>
+                  <td className="px-5 py-3.5 text-right"><ChevronRight size={16} className="text-gray-300 inline" /></td>
+                </tr>
+              ))}
+              {!loading && debts.length === 0 && (
+                <tr><td colSpan={5} className="text-center text-gray-400 py-10">No outstanding debts. Great job! 🎉</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Customer Debt Modal */}
-      <Modal open={!!selected} onClose={() => setSelected(null)} title={`${selected?.name || 'Customer'} — Debt Breakdown`} maxWidth="max-w-3xl">
+      <Modal open={!!selected} onClose={() => setSelected(null)} title={`${selected?.name || 'Customer'} — Debt Breakdown`} maxWidth="max-w-5xl">
         {selected && (
           <div className="space-y-4">
             {/* Debt Summary Header */}
-            <div className="grid grid-cols-3 gap-3 mb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
               <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
                 <div className="text-[9px] uppercase font-bold text-gray-400">Total Charged</div>
                 <div className="text-sm font-extrabold text-litmus-black mt-1">
@@ -329,18 +347,18 @@ ${items.map(it => {
             {items.map((it) => (
               <div key={it.id} className="border border-gray-100 rounded-xl overflow-hidden">
                 {/* Transaction Header */}
-                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-b border-gray-100">
+                <div className="bg-gray-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-gray-100">
                   <div>
                     <div className="font-semibold text-litmus-black text-sm">{it.description}</div>
                     <div className="text-xs text-gray-400 mt-0.5">
                       Sold: {new Date(it.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
-                  <span className={`badge ${statusStyles[it.status]}`}>{it.status}</span>
+                  <span className={`badge ${statusStyles[it.status]} self-start sm:self-center`}>{it.status}</span>
                 </div>
 
                 {/* Financial summary row */}
-                <div className="px-4 py-3 grid grid-cols-3 gap-4 border-b border-gray-100 bg-white">
+                <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3 border-b border-gray-100 bg-white">
                   <div>
                     <div className="text-[9px] text-gray-400 uppercase font-bold">Total Amount</div>
                     <div className="text-sm font-bold text-litmus-black">{formatMoney(it.total_amount)}</div>
@@ -368,11 +386,11 @@ ${items.map(it => {
                   </button>
 
                   {expandedHistories[it.id] && (
-                    <div className="border-t border-gray-100">
+                    <div className="border-t border-gray-100 overflow-x-auto">
                       {(paymentHistories[it.id] || []).length === 0 ? (
                         <div className="text-xs text-gray-400 p-4 text-center">No payments recorded yet.</div>
                       ) : (
-                        <table className="w-full text-xs">
+                        <table className="w-full text-xs min-w-[500px]">
                           <thead>
                             <tr className="bg-gray-50 border-b border-gray-100 text-[9px] uppercase text-gray-400 font-bold">
                               <th className="px-4 py-2 text-left">Date &amp; Time</th>
@@ -409,27 +427,30 @@ ${items.map(it => {
                 </div>
 
                 {/* Receive Payment */}
-                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-2">
+                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="number"
-                    placeholder="Enter partial amount…"
-                    className="input-field text-sm"
+                    placeholder={`Max: ${formatMoney(it.balance)}`}
+                    className="input-field text-sm flex-1"
                     value={payAmount[it.id] || ''}
                     onChange={(e) => setPayAmount({ ...payAmount, [it.id]: e.target.value })}
+                    max={it.balance}
+                    min="0"
+                    step="0.01"
                   />
                   <button
-                    disabled={paying === it.id}
+                    disabled={paying === it.id || !payAmount[it.id] || Number(payAmount[it.id]) <= 0}
                     onClick={() => receivePayment(it.id, false, it.balance)}
-                    className="btn-secondary whitespace-nowrap text-sm"
+                    className="btn-secondary whitespace-nowrap text-sm disabled:opacity-50"
                   >
-                    Partial
+                    Partial Payment
                   </button>
                   <button
-                    disabled={paying === it.id}
+                    disabled={paying === it.id || it.balance <= 0}
                     onClick={() => receivePayment(it.id, true, it.balance)}
-                    className="btn-primary whitespace-nowrap text-sm"
+                    className="btn-primary whitespace-nowrap text-sm disabled:opacity-50"
                   >
-                    Full Payment
+                    Full Payment ({formatMoney(it.balance)})
                   </button>
                 </div>
               </div>
