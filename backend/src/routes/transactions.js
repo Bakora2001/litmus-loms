@@ -288,6 +288,14 @@ router.post(
     const tx = txResult.rows[0];
     if (!tx) return res.status(404).json({ message: 'Transaction not found.' });
 
+    // Validation: Prevent overpayment
+    const currentBalance = Number(tx.total_amount) - Number(tx.amount_paid);
+    if (Number(amount) > currentBalance) {
+      return res.status(400).json({ 
+        message: `Payment amount (KES ${Number(amount).toLocaleString()}) exceeds remaining balance (KES ${currentBalance.toLocaleString()}). Maximum payment allowed is KES ${currentBalance.toLocaleString()}.` 
+      });
+    }
+
     const newPaid = Number(tx.amount_paid) + Number(amount);
     const status = computeStatus(Number(tx.total_amount), newPaid);
 

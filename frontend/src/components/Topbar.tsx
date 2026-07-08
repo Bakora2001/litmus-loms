@@ -1,5 +1,5 @@
-import { Bell, ChevronDown, LogOut, ClipboardList, AlertTriangle, FileText, CheckCircle2, Sun, Menu } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Bell, ChevronDown, LogOut, ClipboardList, AlertTriangle, FileText, CheckCircle2, Sun, Menu, Search, X, Phone, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
@@ -36,6 +36,32 @@ export default function Topbar({ title, subtitle, onToggleSidebar }: TopbarProps
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Customer quick-search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!searchQuery || searchQuery.length < 2) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/customers', { params: { search: searchQuery } });
+        setSearchResults(res.data.slice(0, 6));
+        setSearchOpen(true);
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   // Notification states
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -150,6 +176,51 @@ export default function Topbar({ title, subtitle, onToggleSidebar }: TopbarProps
             </div>
             {subtitle && <p className="text-[10px] text-gray-400 mt-0.5 truncate">{subtitle}</p>}
           </div>
+        </div>
+
+        {/* CENTER — Customer Quick-Search */}
+        <div ref={searchRef} className="hidden md:block relative flex-1 max-w-sm">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => searchResults.length > 0 && setSearchOpen(true)}
+            placeholder="Search customers…"
+            className="w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-gray-200 bg-white focus:border-litmus-red/40 focus:ring-2 focus:ring-litmus-red/10 focus:outline-none transition"
+          />
+          {searchQuery && (
+            <button onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchOpen(false); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+              <X size={12} />
+            </button>
+          )}
+          {searchOpen && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-100 text-[9px] font-bold text-gray-400 uppercase tracking-wide">Customers</div>
+              {searchResults.map((c: any) => (
+                <button
+                  key={c.id}
+                  onClick={() => { navigate('/customers'); setSearchQuery(''); setSearchOpen(false); }}
+                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition border-b border-gray-50 last:border-0 flex items-center gap-3"
+                >
+                  <div className="w-7 h-7 rounded-full bg-litmus-red/10 flex items-center justify-center text-litmus-red text-[10px] font-bold shrink-0">
+                    {(c.name || c.phone).substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold text-xs text-litmus-black truncate">{c.name || 'Unnamed'}</div>
+                    <div className="text-[10px] text-gray-400">{c.phone}</div>
+                  </div>
+                  {Number(c.outstanding_balance) > 0 && (
+                    <span className="text-[9px] font-bold text-litmus-red bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-full shrink-0">
+                      Owes KES {Number(c.outstanding_balance).toLocaleString()}
+                    </span>
+                  )}
+                </button>
+              ))}
+              <div className="px-4 py-2 border-t border-gray-100">
+                <button onClick={() => { navigate('/customers'); setSearchQuery(''); setSearchOpen(false); }} className="text-[10px] font-semibold text-litmus-red hover:underline">View all customers →</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* RIGHT — Actions */}

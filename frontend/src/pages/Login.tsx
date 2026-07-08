@@ -94,8 +94,8 @@ export default function Login() {
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(to bottom, rgba(10,10,10,0.55) 0%, rgba(10,10,10,0.72) 100%), ' +
-              'radial-gradient(circle at 20% 20%, rgba(193,18,31,0.28), transparent 45%)',
+              'linear-gradient(to bottom, rgba(10,10,10,0.25) 0%, rgba(10,10,10,0.45) 100%), ' +
+              'radial-gradient(circle at 20% 20%, rgba(193,18,31,0.18), transparent 45%)',
           }}
         />
 
@@ -133,61 +133,64 @@ export default function Login() {
         </button>
 
         {/* Content overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-12 text-center z-10">
-          {/* Logo */}
-          <svg width="80" height="80" viewBox="0 0 64 64" fill="none" className="mb-4">
-            <rect width="64" height="64" rx="16" fill="rgba(26,26,26,0.7)" stroke="#C1121F" strokeWidth="1.5" />
-            <path d="M20 14h8v26h16v8H20z" fill="#C1121F" />
-            <path d="M44 14a14 14 0 1 1 -14 14" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.85" />
-          </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center px-12 text-left z-10">
+          <div className="w-full max-w-md rounded-2xl overflow-hidden shadow-2xl">
+            {/* Logo + Company Name - White bg */}
+            <div className="bg-white px-8 py-6 flex items-center gap-4">
+              <img
+                src="/logo.png"
+                onError={(e) => {
+                  const el = e.target as HTMLImageElement;
+                  el.style.display = 'none';
+                  if (el.nextSibling) (el.nextSibling as HTMLElement).style.display = 'flex';
+                }}
+                className="h-16 w-16 object-contain flex-shrink-0"
+                alt="Litmus Logo"
+              />
+              <div style={{ display: 'none' }} className="w-14 h-14 rounded-full bg-litmus-red flex items-center justify-center text-white font-black text-xl flex-shrink-0">
+                L
+              </div>
+              <div>
+                <h1 className="text-xl font-black text-litmus-black leading-none tracking-tight">
+                  LITMUS TECH SOLUTIONS
+                </h1>
+                <p className="text-litmus-red text-[11px] font-bold tracking-widest uppercase mt-1">
+                  Technology for You
+                </p>
+                <p className="text-gray-400 text-[10px] mt-0.5 leading-snug">
+                  Design • Printing • Branding • ICT Solutions
+                </p>
+              </div>
+            </div>
 
-          <h1 className="text-3xl font-extrabold text-white drop-shadow">
-            <span className="text-red-400">Litmus</span> Solutions
-          </h1>
-          <p className="text-gray-300 text-sm mt-1 mb-2">Cyber Services &amp; Laptop Store</p>
-
-          {/* Slide caption */}
-          <div
-            className="mt-1 mb-8 text-white/70 text-xs font-medium tracking-widest uppercase transition-opacity duration-500"
-            style={{ opacity: fading ? 0 : 1 }}
-          >
-            — {SLIDES[current].caption} —
-          </div>
-
-          {/* Feature cards */}
-          <div className="w-full max-w-md space-y-3 text-left">
-            {FEATURE_CARDS.map((item) => (
-              <div
-                key={item.title}
-                className="flex items-center gap-3 rounded-xl bg-white/10 border border-white/15 px-4 py-3 backdrop-blur-sm"
-              >
-                <div className="w-9 h-9 rounded-lg bg-red-600/80 flex items-center justify-center shrink-0">
-                  <item.icon size={17} className="text-white" />
+            {/* Dark body with contact info */}
+            <div className="bg-black/60 backdrop-blur-md px-8 py-5 space-y-3">
+              <h3 className="text-litmus-red text-[10px] font-bold uppercase tracking-wider">
+                Contact Information
+              </h3>
+              <div className="space-y-2 text-xs text-gray-300">
+                <div className="flex items-start gap-2.5">
+                  <span className="shrink-0 text-sm">📍</span>
+                  <span>P.O. Box 12345 – 00100, Nairobi, Kenya</span>
                 </div>
-                <div>
-                  <div className="text-white text-sm font-semibold">{item.title}</div>
-                  <div className="text-gray-300 text-xs">{item.sub}</div>
+                <div className="flex items-center gap-2.5">
+                  <span className="shrink-0 text-sm">📞</span>
+                  <span>+254 722 123 456</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="shrink-0 text-sm">📧</span>
+                  <a href="mailto:info@litmussolutions.co.ke" className="hover:underline hover:text-white transition">
+                    info@litmussolutions.co.ke
+                  </a>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="shrink-0 text-sm">🌐</span>
+                  <a href="http://www.litmussolutions.co.ke" target="_blank" rel="noreferrer" className="hover:underline hover:text-white transition">
+                    www.litmussolutions.co.ke
+                  </a>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Quick-access chips */}
-          <div className="grid grid-cols-3 gap-3 w-full max-w-md mt-6">
-            {[
-              { icon: Laptop,      label: 'Laptops',      sub: '120+ models'   },
-              { icon: ShieldCheck, label: 'Accessories',  sub: 'Genuine parts' },
-              { icon: TrendingUp,  label: 'Cyber Desk',   sub: 'Fast service'  },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-xl bg-white/8 border border-white/10 p-4 flex flex-col items-center gap-2 backdrop-blur-sm"
-              >
-                <item.icon size={20} className="text-red-400" />
-                <div className="text-white text-xs font-semibold">{item.label}</div>
-                <div className="text-gray-400 text-[10px]">{item.sub}</div>
-              </div>
-            ))}
+            </div>
           </div>
         </div>
       </div>
@@ -196,16 +199,18 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center px-6 sm:px-12 py-12 bg-white">
         <div className="w-full max-w-sm">
 
-          {/* Mobile logo */}
-          <div className="mb-8 lg:hidden flex items-center gap-3">
-            <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
-              <rect width="64" height="64" rx="16" fill="#1a1a1a" stroke="#C1121F" strokeWidth="1.5" />
-              <path d="M20 14h8v26h16v8H20z" fill="#C1121F" />
-              <path d="M44 14a14 14 0 1 1 -14 14" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" opacity="0.85" />
-            </svg>
-            <span className="text-xl font-extrabold text-gray-900">
-              <span className="text-red-600">Litmus</span> Solutions
-            </span>
+          {/* Logo for right panel */}
+          <div className="mb-8 flex items-center gap-3">
+            <img
+              src="/logo.png"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              className="h-12 w-12 object-contain"
+              alt="Litmus Logo"
+            />
+            <div>
+              <div className="text-lg font-black text-litmus-black leading-tight">LITMUS TECH SOLUTIONS</div>
+              <div className="text-[10px] text-litmus-red font-bold tracking-widest uppercase">Technology for You</div>
+            </div>
           </div>
 
           <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">

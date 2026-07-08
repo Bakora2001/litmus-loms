@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
+  Legend,
   PieChart,
   Pie,
   Cell,
@@ -168,26 +169,45 @@ export default function Dashboard() {
         { label: 'Bulk SMS sent to 250 contacts', created_at: new Date(Date.now() - 18000000).toISOString() },
       ];
 
-  // Format revenue overview chart data
+  // Format revenue overview chart data with upwards sales growth & predictions
   const chartData = revenueChartData();
 
   function revenueChartData() {
+    let baseData = [];
     if (revenue.this_month && revenue.this_month.length > 0) {
-      return revenue.this_month.map((row: any, idx: number) => ({
-        day: new Date(row.day).getDate(),
+      baseData = revenue.this_month.map((row: any, idx: number) => ({
+        day: new Date(row.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
         thisMonth: Number(row.revenue),
         lastMonth: Number(revenue.last_month?.[idx]?.revenue || 0),
       }));
+    } else {
+      // High fidelity default chart mock data for display
+      const days = ['01 Jun', '05 Jun', '10 Jun', '15 Jun', '20 Jun', '25 Jun', '30 Jun'];
+      const thisMonthVals = [8500, 11200, 15400, 21800, 24500, 29200, 36000];
+      const lastMonthVals = [6200, 9100, 12000, 13500, 17800, 19200, 22400];
+      baseData = days.map((day, i) => ({
+        day,
+        thisMonth: thisMonthVals[i],
+        lastMonth: lastMonthVals[i],
+      }));
     }
-    // High fidelity default chart mock data for display
-    const days = [1, 6, 11, 16, 21, 26, 30];
-    const thisMonthVals = [9000, 11000, 16000, 22000, 15000, 25000, 31000];
-    const lastMonthVals = [7000, 10000, 14000, 13000, 18000, 14000, 22000];
-    return days.map((day, i) => ({
-      day: `${day} Jun`,
-      thisMonth: thisMonthVals[i],
-      lastMonth: lastMonthVals[i],
-    }));
+
+    const len = baseData.length;
+    const lastVal = len > 0 ? (baseData[len - 1].thisMonth || 36000) : 36000;
+    
+    // Projections/Predictions showing sales going up
+    const predictedData = [
+      { day: '05 Jul (Pred)', prediction: Math.round(lastVal * 1.08) },
+      { day: '10 Jul (Pred)', prediction: Math.round(lastVal * 1.18) },
+      { day: '15 Jul (Pred)', prediction: Math.round(lastVal * 1.30) },
+    ];
+    
+    // Connect the last real data point to the prediction line
+    if (len > 0) {
+      baseData[len - 1].prediction = baseData[len - 1].thisMonth;
+    }
+
+    return [...baseData, ...predictedData];
   }
 
   const smsUsedPct = Math.round((displaySms.used_credits / displaySms.total_credits) * 100);
@@ -362,23 +382,26 @@ export default function Dashboard() {
               
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="thisMonthGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#C1121F" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#C1121F" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
+                  <LineChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
                     <Tooltip
-                      formatter={(value: any) => [`KES ${value.toLocaleString()}`, '']}
+                      formatter={(value: any, name: string) => {
+                        const labelMap: Record<string, string> = {
+                          thisMonth: 'This Month',
+                          lastMonth: 'Last Month',
+                          prediction: 'Future Prediction'
+                        };
+                        return [`KES ${value.toLocaleString()}`, labelMap[name] || name];
+                      }}
                       contentStyle={{ borderRadius: 8, border: '1px solid #f3f4f6', fontSize: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
                     />
-                    <Area type="monotone" dataKey="lastMonth" stroke="#cbd5e1" strokeWidth={1.5} fill="none" dot={false} />
-                    <Area type="monotone" dataKey="thisMonth" stroke="#C1121F" strokeWidth={2.5} fill="url(#thisMonthGrad)" dot={{ r: 3, fill: '#C1121F' }} />
-                  </AreaChart>
+                    <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 'bold' }} />
+                    <Line name="lastMonth" type="monotone" dataKey="lastMonth" stroke="#cbd5e1" strokeWidth={1.5} dot={false} />
+                    <Line name="thisMonth" type="monotone" dataKey="thisMonth" stroke="#C1121F" strokeWidth={2.5} dot={{ r: 3, fill: '#C1121F' }} />
+                    <Line name="prediction" type="monotone" dataKey="prediction" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 4, fill: '#F59E0B' }} />
+                  </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>

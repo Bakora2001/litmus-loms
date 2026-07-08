@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Calendar as CalendarIcon, User, AlertCircle, Clock, CheckCircle2, ChevronRight, X, Trash2, Edit3 } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { Plus, Calendar as CalendarIcon, User, AlertCircle, Clock, CheckCircle2, ChevronRight, X, Trash2, Edit3, Search } from 'lucide-react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import api from '../api/client';
@@ -14,7 +14,7 @@ const COLUMNS: { key: Task['status']; label: string; bg: string; text: string; d
   { key: 'cancelled', label: 'Cancelled', bg: 'bg-rose-50/40 border-rose-100/40', text: 'text-rose-600', dot: 'bg-rose-400' },
 ];
 
-const emptyForm = { title: '', description: '', deadline: '', priority: 'medium', reminder_before: '1_day' };
+const emptyForm = { title: '', description: '', deadline: '', priority: 'medium', reminder_before: '1_day', client_name: '', client_phone: '' };
 
 export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -27,11 +27,38 @@ export default function Tasks() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isEditingSelected, setIsEditingSelected] = useState(false);
 
+  // Customer contact autocomplete
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerSuggestions, setCustomerSuggestions] = useState<any[]>([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const customerRef = useRef<HTMLDivElement>(null);
+
   function load() {
     api.get('/tasks').then((res) => setTasks(res.data));
   }
 
   useEffect(load, []);
+
+  // Customer search for task form
+  useEffect(() => {
+    if (!customerQuery || customerQuery.length < 2) { setCustomerSuggestions([]); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await api.get('/customers', { params: { search: customerQuery } });
+        setCustomerSuggestions(res.data.slice(0, 6));
+        setShowCustomerSuggestions(true);
+      } catch { /* ignore */ }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [customerQuery]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (customerRef.current && !customerRef.current.contains(e.target as Node)) setShowCustomerSuggestions(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,7 +112,10 @@ export default function Tasks() {
       deadline: task.deadline ? new Date(task.deadline).toISOString().substring(0, 16) : '',
       priority: task.priority,
       reminder_before: task.reminder_before || '1_day',
+      client_name: (task as any).client_name || '',
+      client_phone: (task as any).client_phone || '',
     });
+    setCustomerQuery((task as any).client_name || '');
     setIsEditingSelected(true);
     setShowForm(true);
   }
@@ -288,7 +318,7 @@ export default function Tasks() {
       )}
 
       {/* Form Modal (Create or Edit) */}
-      <Modal open={showForm} onClose={() => setShowForm(false)} title={isEditingSelected ? "Edit Task" : "New Task"}>
+      <Modal open={showForm} onClose={() => { setShowForm(false); setCustomerQuery(''); }} title={isEditingSelected ? "Edit Task" : "New Task"}>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="label-sm">Task Title *</label>
@@ -298,6 +328,44 @@ export default function Tasks() {
             <label className="label-sm">Description</label>
             <textarea className="input-field" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
+
+          {/* Customer contact autocomplete */}
+          <div>
+            <label className="label-sm">Link to Customer (optional)</label>
+            <div ref={customerRef} className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                className="input-field pl-9"
+                value={customerQuery}
+                onChange={(e) => {
+                  setCustomerQuery(e.target.value);
+                  setForm({ ...form, client_name: e.target.value, client_phone: '' });
+                }}
+                onFocus={() => customerSuggestions.length > 0 && setShowCustomerSuggestions(true)}
+                placeholder="Search customer by name or phone…"
+              />
+              {showCustomerSuggestions && customerSuggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+                  {customerSuggestions.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCustomerQuery(c.name || c.phone);
+                        setForm({ ...form, client_name: c.name || c.phone, client_phone: c.phone });
+                        setShowCustomerSuggestions(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-gray-50 transition border-b border-gray-50 last:border-0"
+                    >
+                      <div className="font-semibold text-sm text-litmus-black">{c.name || 'Unnamed'}</div>
+                      <div className="text-xs text-gray-400">{c.phone}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label-sm">Deadline</label>

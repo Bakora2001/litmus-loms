@@ -71,17 +71,51 @@ export default function Reports() {
   const [profit, setProfit] = useState<any>(null);
   const [invoiceList, setInvoiceList] = useState<any[]>([]);
   const [debtList, setDebtList] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
   const [downloading, setDownloading] = useState(false);
 
+  // Compute date range from period
+  function getDateRange() {
+    const now = new Date();
+    const toISO = (d: Date) => d.toISOString().slice(0, 10);
+    if (period === 'custom' && fromDate && toDate) return { from: fromDate, to: toDate };
+    if (period === 'daily') return { from: toISO(now), to: toISO(now) };
+    if (period === 'weekly') {
+      const start = new Date(now); start.setDate(now.getDate() - 7);
+      return { from: toISO(start), to: toISO(now) };
+    }
+    if (period === 'monthly') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: toISO(start), to: toISO(now) };
+    }
+    return { from: `${now.getFullYear()}-01-01`, to: toISO(now) };
+  }
+
   useEffect(() => {
-    api.get('/reports/top-services').then((res) => setTopServices(res.data));
-    api.get('/reports/top-products').then((res) => setTopProducts(res.data));
-    api.get('/reports/debts').then((res) => setDebts(res.data));
-    api.get('/reports/customers').then((res) => setCustomerStats(res.data));
-    api.get('/reports/expenses-profit').then((res) => setProfit(res.data));
-    api.get('/invoices').then((res) => setInvoiceList(res.data || []));
-    api.get('/transactions/debts/summary').then((res) => setDebtList(res.data || []));
-  }, []);
+    const { from, to } = getDateRange();
+    const params = {
+      from: from ? `${from}T00:00:00.000Z` : undefined,
+      to: to ? `${to}T23:59:59.999Z` : undefined,
+    };
+
+    function loadData() {
+      api.get('/reports/top-services', { params }).then((res) => setTopServices(res.data)).catch(() => {});
+      api.get('/reports/top-products', { params }).then((res) => setTopProducts(res.data)).catch(() => {});
+      api.get('/reports/debts').then((res) => setDebts(res.data)).catch(() => {});
+      api.get('/reports/customers').then((res) => setCustomerStats(res.data)).catch(() => {});
+      api.get('/reports/expenses-profit', { params }).then((res) => setProfit(res.data)).catch(() => {});
+      api.get('/invoices', { params }).then((res) => setInvoiceList(res.data || [])).catch(() => {});
+      api.get('/transactions/debts/summary').then((res) => setDebtList(res.data || [])).catch(() => {});
+      api.get('/transactions', { params }).then((res) => setTransactions(res.data || [])).catch(() => {});
+    }
+
+    loadData();
+
+    // Auto-refresh every 60 seconds
+    const intervalId = setInterval(loadData, 60000);
+
+    return () => clearInterval(intervalId);
+  }, [period, fromDate, toDate]);
 
   // Build donut data for services
   const serviceDonutData = topServices.slice(0, 7).map((s: any) => ({

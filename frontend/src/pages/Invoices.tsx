@@ -1095,14 +1095,162 @@ export default function Invoices() {
               </div>
             </div>
 
-            <div className="px-5 py-3 border-t border-gray-150 bg-gray-50 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPreviewModal(false)}
-                className="border border-gray-200 text-gray-650 bg-white hover:bg-gray-50 text-xs font-semibold px-4 py-2 rounded-lg transition"
-              >
-                Close Preview
-              </button>
+            <div className="px-5 py-3 border-t border-gray-150 bg-gray-50 flex justify-between items-center gap-2">
+              <div className="text-xs text-gray-400">
+                {previewInvoice ? (
+                  <span className={`font-bold ${previewInvoice.status === 'paid' ? 'text-emerald-600' : 'text-litmus-red'}`}>
+                    {previewInvoice.status?.toUpperCase()}
+                  </span>
+                ) : 'Preview Mode'}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const inv = previewInvoice;
+                    const status = inv?.status || 'unpaid';
+                    const isPaid = status === 'paid';
+                    const watermarkColor = isPaid ? '#10b981' : '#ef4444';
+                    const watermarkText = isPaid ? 'PAID' : status === 'overdue' ? 'OVERDUE' : 'UNPAID';
+                    const customerName = inv?.customer_name || (isManualCustomer ? (manualCustomerName || 'Walk-in Customer') : (customers.find(c => c.id === customerId)?.name || 'Walk-in Customer'));
+                    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Invoice ${invoiceNumber}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin: 30px; }
+  .header-container { border-top: 5px solid #C1121F; margin-bottom: 20px; }
+  .header-logo-row { display: flex; justify-content: space-between; align-items: center; background: #000; color: #fff; padding: 12px 20px; }
+  .logo-block { display: flex; align-items: center; gap: 12px; }
+  .logo-circle { width: 42px; height: 42px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; border: 2px solid #C1121F; overflow: hidden; }
+  .logo-circle img { height: 32px; object-fit: contain; }
+  .company-title { font-size: 22px; font-weight: 900; letter-spacing: -0.5px; }
+  .contact-bar { background: #fff; border-top: 3px solid #C1121F; border-bottom: 3px solid #C1121F; text-align: center; padding: 6px 0; font-size: 9px; font-weight: bold; color: #000; }
+  
+  .info-row { display: flex; justify-content: space-between; margin-top: 25px; margin-bottom: 25px; align-items: flex-end; }
+  .client-details { width: 45%; text-align: left; }
+  .client-title { font-size: 12px; font-weight: bold; text-decoration: underline; margin-bottom: 6px; }
+  .client-info { font-size: 11px; color: #333; line-height: 1.4; }
+  .invoice-pill { background: #000; color: #fff; padding: 5px 25px; font-size: 13px; font-weight: bold; border-radius: 4px; letter-spacing: 1px; }
+  .invoice-date { font-size: 11px; font-weight: bold; text-align: right; }
+  
+  .table-container { position: relative; min-height: 400px; border: 1.5px solid #000; border-radius: 0 0 12px 12px; overflow: hidden; margin-top: 15px; }
+  .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-25deg); font-size: 48px; font-weight: 900; color: rgba(0, 0, 0, 0.03); pointer-events: none; user-select: none; z-index: 0; white-space: nowrap; text-align: center; font-family: 'Arial Black', sans-serif; }
+  .content-wrapper { position: relative; z-index: 1; }
+  
+  table.invoice-table { width: 100%; border-collapse: collapse; }
+  table.invoice-table th { background: #000; color: #fff; font-size: 11px; font-weight: bold; padding: 10px; text-transform: uppercase; text-align: left; border-right: 1.5px solid #000; }
+  table.invoice-table th:last-child { border-right: none; }
+  table.invoice-table td { padding: 12px 10px; font-size: 11px; vertical-align: top; border-right: 1.5px solid #000; text-align: left; }
+  table.invoice-table td:last-child { border-right: none; }
+  
+  .filler-row { height: 180px; }
+  .totals-row { border-top: 1.5px solid #000; }
+  .totals-row td { padding: 10px; font-weight: bold; font-size: 12px; }
+  .payment-details-cell { font-size: 8px; color: #444; line-height: 1.3; }
+  .invoice-number-red { font-size: 12px; color: #C1121F; font-weight: bold; margin-top: 6px; }
+  
+  .services-footer { margin-top: 25px; border-top: 2px solid #C1121F; padding-top: 12px; text-align: left; }
+  .services-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 6px 30px; font-size: 9px; color: #333; font-weight: bold; }
+</style></head>
+<body>
+<div class="header-container">
+  <div class="header-logo-row">
+    <div class="logo-block">
+      <div class="logo-circle">
+        <img src="/logo.png" onError="this.style.display='none'" />
+      </div>
+      <div class="company-title">Litmus Tech Solutions</div>
+    </div>
+  </div>
+  <div class="contact-bar">
+    Tel: +254 723 005 182 | 0706 085 261 | Email: info@litmussolution.co.ke | Website: www.litmussolution.co.ke
+  </div>
+</div>
+
+<div class="info-row">
+  <div class="client-details">
+    <div class="client-title">Client Details</div>
+    <div class="client-info">
+      <strong>Name:</strong> ${customerName || 'Walk-in Customer'}<br>
+      ${manualCustomerPhone ? `<strong>Phone:</strong> ${manualCustomerPhone}<br>` : ''}
+      ${manualCustomerEmail ? `<strong>Email:</strong> ${manualCustomerEmail}` : ''}
+    </div>
+  </div>
+  <div>
+    <div class="invoice-pill">INVOICE</div>
+  </div>
+  <div class="invoice-date">
+    Date: ${invoiceDate ? invoiceDate.replace(/-/g, ' . ') : ' . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .'}
+  </div>
+</div>
+
+<div class="table-container">
+  <div class="watermark">Litmus Tech Solutions</div>
+  <table class="invoice-table">
+    <thead>
+      <tr>
+        <th style="width:10%">Qty</th>
+        <th style="width:50%">Descriptions</th>
+        <th style="width:20%">Unit Price</th>
+        <th style="width:20%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map(it => `<tr>
+        <td>${it.qty}</td>
+        <td><strong>${it.name}</strong>${it.description ? `<br><small style="color:#666">${it.description}</small>` : ''}</td>
+        <td>KES ${Number(it.price).toLocaleString()}</td>
+        <td>KES ${(Number(it.qty) * Number(it.price)).toLocaleString()}</td>
+      </tr>`).join('')}
+      <tr class="filler-row">
+        <td></td><td></td><td></td><td></td>
+      </tr>
+      <tr class="totals-row">
+        <td class="payment-details-cell" colspan="2">
+          <strong>PAYMENT DETAILS</strong> Business no: 222111 account no: 598379<br>
+          Family Bank<br>
+          Litmus Tech Solutions
+          <div class="invoice-number-red">NO: ${invoiceNumber}</div>
+        </td>
+        <td style="text-align: center; vertical-align: middle; text-transform: uppercase;">Total</td>
+        <td style="text-align: right; font-weight: bold; font-size: 12px; vertical-align: middle;">KES ${items.reduce((s, it) => s + it.qty * Number(it.price), 0).toLocaleString()}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="services-footer">
+  <div class="services-grid">
+    <div>• Internet installation and networking</div>
+    <div>• Website design and development</div>
+    <div>• Computer and laptop sales, repair, and maintenance</div>
+    <div>• Graphic design and digital branding</div>
+    <div>• Software installation and system support</div>
+    <div>• Printing, photocopying, scanning, and document processing</div>
+    <div>• ICT consultancy and technical support</div>
+    <div>• Cyber services and online applications</div>
+  </div>
+</div>
+</body></html>`;
+                    const blob = new Blob([html], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `invoice-${invoiceNumber}.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="btn-secondary text-xs flex items-center gap-1.5"
+                >
+                  ⬇ Download HTML
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowPreviewModal(false); setPreviewInvoice(null); }}
+                  className="border border-gray-200 text-gray-650 bg-white hover:bg-gray-50 text-xs font-semibold px-4 py-2 rounded-lg transition"
+                >
+                  Close Preview
+                </button>
+              </div>
             </div>
           </div>
         </div>
