@@ -10,11 +10,11 @@ function computeStatus(total, paid) {
   return 'partial';
 }
 
-// List transactions - filterable by module, status, customer
+// List transactions - filterable by module, status, customer, date range
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { module, status, customer_id, from, to } = req.query;
+    const { module, status, customer_id, from, to, search } = req.query;
     const clauses = [];
     const params = [];
 
@@ -38,6 +38,10 @@ router.get(
       params.push(to);
       clauses.push(`t.created_at <= $${params.length}`);
     }
+    if (search) {
+      params.push(`%${search}%`);
+      clauses.push(`(t.description ILIKE $${params.length} OR c.name ILIKE $${params.length} OR c.phone ILIKE $${params.length})`);
+    }
 
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const { rows } = await pool.query(
@@ -47,7 +51,7 @@ router.get(
        LEFT JOIN users u ON u.id = t.served_by
        ${where}
        ORDER BY t.created_at DESC
-       LIMIT 500`,
+       LIMIT 1000`,
       params
     );
     res.json(rows);
@@ -74,6 +78,49 @@ router.get(
   })
 );
 
+// Get payment history for a specific transaction
+router.get(
+  '/:id/payments',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `SELECT p.*, u.name AS received_by_name
+       FROM payments p
+       LEFT JOIN users u ON u.id = p.received_by
+       WHERE p.transaction_id = $1
+       ORDER BY p.created_at ASC`,
+      [id]
+    );
+    res.json(rows);
+  })
+);
+
+// Get single transaction detail with payments
+router.get(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const txRes = await pool.query(
+      `SELECT t.*, c.name AS customer_name, c.phone AS customer_phone
+       FROM transactions t
+       LEFT JOIN customers c ON c.id = t.customer_id
+       WHERE t.id = $1`,
+      [id]
+    );
+    if (!txRes.rows[0]) return res.status(404).json({ message: 'Transaction not found.' });
+
+    const payments = await pool.query(
+      `SELECT p.*, u.name AS received_by_name
+       FROM payments p
+       LEFT JOIN users u ON u.id = p.received_by
+       WHERE p.transaction_id = $1
+       ORDER BY p.created_at ASC`,
+      [id]
+    );
+    res.json({ ...txRes.rows[0], payments: payments.rows });
+  })
+);
+
 // Create a new transaction (cyber service or product sale)
 router.post(
   '/',
@@ -81,6 +128,8 @@ router.post(
     const {
       customer_id,
       customer_phone,
+      customer_name,
+      customer_email,
       module,
       service_id,
       product_id,
@@ -88,6 +137,7 @@ router.post(
       quantity = 1,
       unit_price,
       amount_paid = 0,
+      payment_status, // 'paid' | 'partial' | 'not_paid'
       served_by,
       due_date,
     } = req.body;
@@ -98,22 +148,51 @@ router.post(
 
     let finalCustomerId = customer_id || null;
 
-    // Allow quick-record by phone number, auto-creating the customer
-    if (!finalCustomerId && customer_phone) {
-      const existing = await pool.query('SELECT id FROM customers WHERE phone = $1', [customer_phone]);
-      if (existing.rows[0]) {
-        finalCustomerId = existing.rows[0].id;
-      } else {
-        const created = await pool.query(
-          'INSERT INTO customers (phone) VALUES ($1) RETURNING id',
-          [customer_phone]
-        );
-        finalCustomerId = created.rows[0].id;
+    // Auto-create or find customer by phone
+    if (!finalCustomerId && (customer_phone || customer_name)) {
+      if (customer_phone) {
+        const existing = await pool.query('SELECT id FROM customers WHERE phone = $1', [customer_phone]);
+        if (existing.rows[0]) {
+          finalCustomerId = existing.rows[0].id;
+          // Update name/email if provided
+          if (customer_name || customer_email) {
+            await pool.query(
+              `UPDATE customers SET
+                name = COALESCE($1, name),
+                email = COALESCE($2, email),
+                updated_at = NOW()
+               WHERE id = $3`,
+              [customer_name || null, customer_email || null, finalCustomerId]
+            );
+          }
+        } else {
+          const created = await pool.query(
+            `INSERT INTO customers (phone, name, email) VALUES ($1, $2, $3) RETURNING id`,
+            [customer_phone, customer_name || null, customer_email || null]
+          );
+          finalCustomerId = created.rows[0].id;
+        }
       }
     }
 
     const total = Number(quantity) * Number(unit_price);
-    const status = computeStatus(total, Number(amount_paid));
+
+    // Determine status from payment_status selector or amount_paid
+    let status;
+    if (payment_status === 'paid') {
+      status = 'paid';
+    } else if (payment_status === 'partial') {
+      status = 'partial';
+    } else if (payment_status === 'not_paid') {
+      status = 'pending';
+    } else {
+      status = computeStatus(total, Number(amount_paid));
+    }
+
+    const finalAmountPaid = payment_status === 'paid' ? total
+      : payment_status === 'not_paid' ? 0
+      : Number(amount_paid);
+
     const activeServedBy = req.user?.id || served_by || null;
 
     // Deduct stock if it's a product sale
@@ -143,21 +222,53 @@ router.post(
         quantity,
         unit_price,
         total,
-        amount_paid,
+        finalAmountPaid,
         status,
         activeServedBy,
         due_date || null,
       ]
     );
 
-    if (Number(amount_paid) > 0) {
+    if (finalAmountPaid > 0) {
       await pool.query(
         `INSERT INTO payments (transaction_id, amount, received_by) VALUES ($1,$2,$3)`,
-        [rows[0].id, amount_paid, activeServedBy]
+        [rows[0].id, finalAmountPaid, activeServedBy]
       );
     }
 
     res.status(201).json(rows[0]);
+  })
+);
+
+// Edit a transaction
+router.patch(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { description, unit_price, quantity, due_date } = req.body;
+
+    const tx = await pool.query('SELECT * FROM transactions WHERE id = $1', [id]);
+    if (!tx.rows[0]) return res.status(404).json({ message: 'Transaction not found.' });
+
+    const newUnitPrice = unit_price !== undefined ? Number(unit_price) : Number(tx.rows[0].unit_price);
+    const newQty = quantity !== undefined ? Number(quantity) : Number(tx.rows[0].quantity);
+    const newTotal = newUnitPrice * newQty;
+    const currentPaid = Number(tx.rows[0].amount_paid);
+    const newStatus = computeStatus(newTotal, currentPaid);
+
+    const { rows } = await pool.query(
+      `UPDATE transactions SET
+        description = COALESCE($1, description),
+        unit_price = $2,
+        quantity = $3,
+        total_amount = $4,
+        status = $5,
+        due_date = COALESCE($6, due_date),
+        updated_at = NOW()
+       WHERE id = $7 RETURNING *`,
+      [description || null, newUnitPrice, newQty, newTotal, newStatus, due_date || null, id]
+    );
+    res.json(rows[0]);
   })
 );
 
@@ -166,7 +277,8 @@ router.post(
   '/:id/payments',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { amount, method = 'cash', received_by } = req.body;
+    const { amount, method = 'cash' } = req.body;
+    const received_by = req.user?.id || req.body.received_by || null;
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ message: 'A valid payment amount is required.' });
@@ -184,12 +296,12 @@ router.post(
       [newPaid, status, id]
     );
 
-    await pool.query(
-      `INSERT INTO payments (transaction_id, amount, method, received_by) VALUES ($1,$2,$3,$4)`,
-      [id, amount, method, received_by || null]
+    const payment = await pool.query(
+      `INSERT INTO payments (transaction_id, amount, method, received_by) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [id, amount, method, received_by]
     );
 
-    res.json(updated.rows[0]);
+    res.json({ transaction: updated.rows[0], payment: payment.rows[0] });
   })
 );
 

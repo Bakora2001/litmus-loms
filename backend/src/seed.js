@@ -11,7 +11,7 @@ async function seed() {
       `INSERT INTO users (name, email, password_hash, role)
        VALUES ($1, $2, $3, 'owner')
        ON CONFLICT (email) DO NOTHING`,
-      ['Admin Dennis Babu', 'admin@litmussolutions.co.ke', passwordHash]
+      ['Admin Deniss Babu', 'admin@litmussolutions.co.ke', passwordHash]
     );
 
     console.log('▶ Seeding a couple of demo customers...');

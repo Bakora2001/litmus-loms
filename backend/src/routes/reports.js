@@ -21,11 +21,25 @@ router.get(
 router.get(
   '/top-services',
   asyncHandler(async (req, res) => {
+    const { from, to } = req.query;
+    const params = [];
+    let where = 'WHERE t.module = \'cyber_service\'';
+    
+    if (from) {
+      params.push(from);
+      where += ` AND t.created_at >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND t.created_at <= $${params.length}`;
+    }
+
     const { rows } = await pool.query(
       `SELECT sc.name, COUNT(t.id) AS times_sold, SUM(t.total_amount) AS revenue
        FROM transactions t JOIN service_catalog sc ON sc.id = t.service_id
-       WHERE t.module = 'cyber_service'
-       GROUP BY sc.name ORDER BY revenue DESC LIMIT 10`
+       ${where}
+       GROUP BY sc.name ORDER BY revenue DESC LIMIT 10`,
+      params
     );
     res.json(rows);
   })
@@ -34,11 +48,25 @@ router.get(
 router.get(
   '/top-products',
   asyncHandler(async (req, res) => {
+    const { from, to } = req.query;
+    const params = [];
+    let where = 'WHERE t.module = \'product_sale\'';
+    
+    if (from) {
+      params.push(from);
+      where += ` AND t.created_at >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND t.created_at <= $${params.length}`;
+    }
+
     const { rows } = await pool.query(
       `SELECT p.name, SUM(t.quantity) AS units_sold, SUM(t.total_amount) AS revenue
        FROM transactions t JOIN products p ON p.id = t.product_id
-       WHERE t.module = 'product_sale'
-       GROUP BY p.name ORDER BY revenue DESC LIMIT 10`
+       ${where}
+       GROUP BY p.name ORDER BY revenue DESC LIMIT 10`,
+      params
     );
     res.json(rows);
   })
@@ -76,8 +104,32 @@ router.get(
 router.get(
   '/expenses-profit',
   asyncHandler(async (req, res) => {
-    const revenue = await pool.query(`SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions`);
-    const expenses = await pool.query(`SELECT COALESCE(SUM(amount),0) AS total FROM expenses`);
+    const { from, to } = req.query;
+    const params = [];
+    let revenueWhere = '';
+    let expensesWhere = '';
+
+    if (from) {
+      params.push(from);
+      revenueWhere += ` WHERE created_at >= $${params.length}`;
+      expensesWhere += ` WHERE created_at >= $${params.length}`;
+    }
+    if (to) {
+      params.push(to);
+      const connector = from ? ' AND' : ' WHERE';
+      const paramIndex = from ? params.length : params.length;
+      revenueWhere += `${connector} created_at <= $${paramIndex}`;
+      expensesWhere += `${connector} created_at <= $${paramIndex}`;
+    }
+
+    const revenue = await pool.query(
+      `SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions${revenueWhere}`,
+      from && to ? [from, to] : from ? [from] : to ? [to] : []
+    );
+    const expenses = await pool.query(
+      `SELECT COALESCE(SUM(amount),0) AS total FROM expenses${expensesWhere}`,
+      from && to ? [from, to] : from ? [from] : to ? [to] : []
+    );
     const rev = Number(revenue.rows[0].total);
     const exp = Number(expenses.rows[0].total);
     res.json({ revenue: rev, expenses: exp, profit: rev - exp });
