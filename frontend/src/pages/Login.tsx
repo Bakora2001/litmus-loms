@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, TrendingUp, PieChart, Laptop, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import litmusLogo from '../assets/litmus-logo.png';
 
 // ─── Background slide images ────────────────────────────────────────────────
 // To use your own images:
@@ -138,7 +139,7 @@ export default function Login() {
             {/* Logo + Company Name - White bg */}
             <div className="bg-white px-8 py-6 flex items-center gap-4">
               <img
-                src="/logo.png"
+                src={litmusLogo}
                 onError={(e) => {
                   const el = e.target as HTMLImageElement;
                   el.style.display = 'none';
@@ -171,11 +172,11 @@ export default function Login() {
               <div className="space-y-2 text-xs text-gray-300">
                 <div className="flex items-start gap-2.5">
                   <span className="shrink-0 text-sm">📍</span>
-                  <span>P.O. Box 12345 – 00100, Nairobi, Kenya</span>
+                  <span>P.o Box 33058-30100 Eldoret-Kenya</span>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <span className="shrink-0 text-sm">📞</span>
-                  <span>+254 722 123 456</span>
+                  <span>+254 723 005 182</span>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <span className="shrink-0 text-sm">📧</span>
@@ -202,7 +203,7 @@ export default function Login() {
           {/* Logo for right panel */}
           <div className="mb-8 flex items-center gap-3">
             <img
-              src="/logo.png"
+              src={litmusLogo}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               className="h-12 w-12 object-contain"
               alt="Litmus Logo"

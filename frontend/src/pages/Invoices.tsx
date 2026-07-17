@@ -944,8 +944,8 @@ export default function Invoices() {
                     <span className="text-[8px] text-gray-400 font-bold uppercase block tracking-wider mb-1.5">From:</span>
                     <div className="font-bold text-gray-850 text-[9px]">Litmus Solutions</div>
                     <div className="text-gray-500">Cyber Services &amp; Laptop Store</div>
-                    <div className="text-gray-500">P.O Box 12345, Nairobi, Kenya</div>
-                    <div className="text-gray-500">Phone: 0722 123 456</div>
+                    <div className="text-gray-500">P.o Box 33058-30100 Eldoret-Kenya</div>
+                    <div className="text-gray-500">Phone: +254 723 005 182</div>
                     <div className="text-gray-500">Email: info@litmussolutions.co.ke</div>
                     <div className="text-gray-500">Website: www.litmussolutions.co.ke</div>
                   </div>

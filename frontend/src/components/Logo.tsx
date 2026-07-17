@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import litmusLogo from '../assets/litmus-logo.png';
 
 interface LogoProps {
   variant?: 'light' | 'dark';
@@ -21,7 +22,7 @@ export default function Logo({ variant = 'light', showTagline = false, size = 'm
     <div className="flex items-center gap-3">
       {!logoError ? (
         <img 
-          src="/logo.png" 
+          src={litmusLogo} 
           onError={() => setLogoError(true)} 
           className={`${s.height} object-contain`} 
           alt="Litmus Logo" 
