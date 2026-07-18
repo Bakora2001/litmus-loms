@@ -5,11 +5,13 @@ import { useAuth } from '../context/AuthContext';
 // Map routes to the permission key required to access them
 const ROUTE_PERMISSIONS: Record<string, string> = {
   '/inventory': 'inventory',
+  '/computer-store': 'inventory',
   '/laptop-store': 'inventory',
   '/invoices': 'invoices',
   '/debt-tracker': 'debt_tracker',
   '/bulk-sms': 'sms',
   '/reports': 'reports',
+  '/sales': 'reports',
   '/expenses': 'expenses',
   '/settings': 'settings',
 };
@@ -21,18 +23,18 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-litmus-bg text-gray-400 text-sm">
-        Loading Litmus Solutions…
+        Loading Litmus Tech Solutions…
       </div>
     );
   }
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Check route-level permissions (owners/admins bypass)
-  const isOwnerOrAdmin = user.role === 'owner' || user.role === 'admin';
+  // Check route-level permissions (owner bypasses)
+  const isOwner = user.role === 'owner';
   const requiredPermission = ROUTE_PERMISSIONS[location.pathname];
-
-  if (!isOwnerOrAdmin && requiredPermission) {
+ 
+  if (!isOwner && requiredPermission) {
     const userPermissions: string[] = user.permissions || [];
     if (!userPermissions.includes(requiredPermission)) {
       // Redirect to dashboard with an access-denied notice

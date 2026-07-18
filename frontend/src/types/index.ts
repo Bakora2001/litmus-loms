@@ -108,6 +108,8 @@ export interface Invoice {
   total: number;
   status: 'unpaid' | 'paid' | 'overdue' | 'draft' | 'partial';
   terms?: string;
+  created_by?: string;
+  creator_name?: string;
   created_at: string;
 }
 

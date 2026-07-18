@@ -50,8 +50,8 @@ export default function Dashboard() {
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
-  const hasPermission = (perm: string) => isOwnerOrAdmin || (user?.permissions || []).includes(perm);
+  const isOwner = user?.role === 'owner';
+  const hasPermission = (perm: string) => isOwner || (user?.permissions || []).includes(perm);
 
   useEffect(() => {
     Promise.all([
@@ -385,7 +385,7 @@ export default function Dashboard() {
                   <LineChart data={chartData} margin={{ top: 10, right: 5, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[0, 'auto']} tick={{ fontSize: 9, fill: '#999' }} axisLine={false} tickLine={false} />
                     <Tooltip
                       formatter={(value: any, name: string) => {
                         const labelMap: Record<string, string> = {

@@ -64,6 +64,58 @@ export default function DebtTracker() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
 
+  // Add custom debt states
+  const [showAddDebtForm, setShowAddDebtForm] = useState(false);
+  const [newDebtDescription, setNewDebtDescription] = useState('');
+  const [newDebtAmount, setNewDebtAmount] = useState('');
+  const [newDebtDueDate, setNewDebtDueDate] = useState('');
+  const [addingDebt, setAddingDebt] = useState(false);
+
+  async function handleAddDebt() {
+    if (!selected) return;
+    const amount = Number(newDebtAmount);
+    if (!newDebtDescription.trim()) {
+      alert('Please enter a description for the debt.');
+      return;
+    }
+    if (!amount || amount <= 0) {
+      alert('Please enter a valid debt amount.');
+      return;
+    }
+    setAddingDebt(true);
+    try {
+      await api.post('/transactions', {
+        customer_id: selected.customer_id,
+        module: 'product_sale',
+        description: newDebtDescription.trim(),
+        quantity: 1,
+        unit_price: amount,
+        amount_paid: 0,
+        payment_status: 'not_paid',
+        due_date: newDebtDueDate || null,
+      });
+      // Reset form
+      setNewDebtDescription('');
+      setNewDebtAmount('');
+      setNewDebtDueDate('');
+      setShowAddDebtForm(false);
+      
+      // Refresh modal and list
+      const updatedSummary = {
+        ...selected,
+        total_balance: String(Number(selected.total_balance) + amount),
+        open_items: String(Number(selected.open_items) + 1)
+      };
+      setSelected(updatedSummary);
+      await openCustomer(updatedSummary);
+      load();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Failed to add debt.');
+    } finally {
+      setAddingDebt(false);
+    }
+  }
+
   function load() {
     setLoading(true);
     const { from, to } = getPeriodDates(period, customFrom, customTo);
@@ -415,6 +467,13 @@ ${items.map((it: any) => {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddDebtForm(!showAddDebtForm)}
+                className="inline-flex items-center gap-1.5 bg-red-650 hover:bg-red-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+              >
+                {showAddDebtForm ? 'Cancel New Debt' : '+ Add New Debt'}
+              </button>
               {selected.phone && (() => {
                 const rawPhone = selected.phone.replace(/\D/g, '');
                 const wa = rawPhone.startsWith('0') ? '254' + rawPhone.slice(1) : rawPhone;
@@ -443,6 +502,66 @@ ${items.map((it: any) => {
                 <Download size={13} /> Download Debt Statement
               </button>
             </div>
+
+            {/* Collapsable Add Debt Form */}
+            {showAddDebtForm && (
+              <div className="bg-red-50/50 border border-red-200/60 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-bold text-litmus-red uppercase tracking-wider">Add Additional Debt Transaction</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Debt Description</label>
+                    <input
+                      type="text"
+                      className="input-field text-xs py-1.5"
+                      placeholder="e.g. Printer repair service, extra memory card"
+                      value={newDebtDescription}
+                      onChange={(e) => setNewDebtDescription(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Outstanding Debt Amount (KES)</label>
+                    <input
+                      type="number"
+                      className="input-field text-xs py-1.5"
+                      placeholder="e.g. 3500"
+                      value={newDebtAmount}
+                      onChange={(e) => setNewDebtAmount(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Due Date (Optional)</label>
+                    <input
+                      type="date"
+                      className="input-field text-xs py-1.5"
+                      value={newDebtDueDate}
+                      onChange={(e) => setNewDebtDueDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddDebtForm(false);
+                      setNewDebtDescription('');
+                      setNewDebtAmount('');
+                      setNewDebtDueDate('');
+                    }}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-500 hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={addingDebt || !newDebtDescription.trim() || !newDebtAmount}
+                    onClick={handleAddDebt}
+                    className="bg-litmus-red hover:bg-litmus-redHover text-white text-xs font-semibold px-4.5 py-1.5 rounded-lg transition disabled:opacity-50"
+                  >
+                    {addingDebt ? 'Adding...' : 'Confirm Add Debt'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Transaction items with payment history */}
             {items.map((it) => (

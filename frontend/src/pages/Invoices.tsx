@@ -61,9 +61,9 @@ export default function Invoices() {
   ]);
 
   // Notes & terms states
-  const [notes, setNotes] = useState('Thank you for choosing Litmus Solutions.');
+  const [notes, setNotes] = useState('Thank you for choosing Litmus Tech Solutions.');
   const [termsConds, setTermsConds] = useState(
-    "1. Payment is due on or before the due date.\n2. Late payments may attract additional charges.\n3. Thank you for choosing Litmus Solutions."
+    "1. Payment is due on or before the due date.\n2. Late payments may attract additional charges.\n3. Thank you for choosing Litmus Tech Solutions."
   );
 
   // General billing calculation states
@@ -79,19 +79,30 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false);
   const [prefix, setPrefix] = useState('INV-2026-');
 
-  // Document Type state
-  const [docType, setDocType] = useState<'invoice' | 'quotation'>('invoice');
+  // Document Type state — invoice | quotation | receipt
+  const [docType, setDocType] = useState<'invoice' | 'quotation' | 'receipt'>('invoice');
 
-  // Editing state for invoices/quotations
+  // Editing state for invoices/quotations/receipts
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Filter states
+  const [users, setUsers] = useState<any[]>([]);
+  const [creatorFilter, setCreatorFilter] = useState('');
+  const [fromDateFilter, setFromDateFilter] = useState('');
+  const [toDateFilter, setToDateFilter] = useState('');
+
   // Load backend details
-  function load(typeFilter: 'invoice' | 'quotation' = docType) {
-    api.get('/invoices', { params: { type: typeFilter } }).then((res) => {
+  function load(typeFilter: 'invoice' | 'quotation' | 'receipt' = docType) {
+    const params: any = { type: typeFilter };
+    if (creatorFilter) params.created_by = creatorFilter;
+    if (fromDateFilter) params.from_date = fromDateFilter;
+    if (toDateFilter) params.to_date = toDateFilter;
+    api.get('/invoices', { params }).then((res) => {
       setInvoices(res.data);
     });
     api.get('/customers').then((res) => setCustomers(res.data));
     api.get('/products').then((res) => setProducts(res.data));
+    api.get('/settings/users').then((res) => setUsers(res.data)).catch(() => {});
   }
 
   useEffect(() => {
@@ -107,7 +118,7 @@ export default function Invoices() {
         }
       }
     }).catch(() => {});
-  }, [docType]);
+  }, [docType, creatorFilter, fromDateFilter, toDateFilter]);
 
   // Update dynamic invoice number preview based on list length
   useEffect(() => {
@@ -278,10 +289,10 @@ export default function Invoices() {
   );
 
   return (
-    <Layout title={view === 'list' ? (docType === 'invoice' ? 'Invoices' : 'Quotations') : undefined}>
+    <Layout title={view === 'list' ? (docType === 'invoice' ? 'Invoices' : docType === 'receipt' ? 'Receipts' : 'Quotations') : undefined}>
       {view === 'list' ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
               <button
                 type="button"
@@ -297,23 +308,75 @@ export default function Invoices() {
               >
                 Quotations
               </button>
+              <button
+                type="button"
+                onClick={() => { setDocType('receipt'); setView('list'); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${docType === 'receipt' ? 'bg-white text-litmus-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Receipts
+              </button>
             </div>
             <button 
               type="button"
               onClick={() => { setView('create'); setEditingId(null); }} 
               className="btn-primary flex items-center gap-2 shadow-soft"
             >
-              <Plus size={16} /> Create {docType === 'invoice' ? 'Invoice' : 'Quotation'}
+              <Plus size={16} /> Create {docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Receipt'}
             </button>
+          </div>
+
+          {/* Filters Row */}
+          <div className="flex flex-wrap items-end gap-3 mb-4 bg-gray-50 border border-gray-100 rounded-xl p-3.5">
+            <div className="flex flex-col gap-1 min-w-[160px]">
+              <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Created By</label>
+              <select
+                className="input-field text-xs py-1.5"
+                value={creatorFilter}
+                onChange={(e) => setCreatorFilter(e.target.value)}
+              >
+                <option value="">All Staff</option>
+                {users.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">From Date</label>
+              <input
+                type="date"
+                className="input-field text-xs py-1.5"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">To Date</label>
+              <input
+                type="date"
+                className="input-field text-xs py-1.5"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+              />
+            </div>
+            {(creatorFilter || fromDateFilter || toDateFilter) && (
+              <button
+                type="button"
+                onClick={() => { setCreatorFilter(''); setFromDateFilter(''); setToDateFilter(''); }}
+                className="text-xs text-litmus-red font-semibold hover:underline pb-1"
+              >
+                ✕ Clear Filters
+              </button>
+            )}
           </div>
 
           <div className="card p-0 overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
-                  <th className="px-5 py-3 font-medium">{docType === 'invoice' ? 'Invoice #' : 'Quotation #'}</th>
+                  <th className="px-5 py-3 font-medium">{docType === 'invoice' ? 'Invoice #' : docType === 'receipt' ? 'Receipt #' : 'Quotation #'}</th>
                   <th className="px-5 py-3 font-medium">Customer</th>
                   <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Created By</th>
                   <th className="px-5 py-3 font-medium">Total</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium"></th>
@@ -325,6 +388,7 @@ export default function Invoices() {
                     <td className="px-5 py-3.5 font-medium text-litmus-black">{inv.invoice_number}</td>
                     <td className="px-5 py-3.5 text-gray-500">{inv.customer_name || 'Walk-in'}</td>
                     <td className="px-5 py-3.5 text-gray-500">{formatDate(inv.issue_date)}</td>
+                    <td className="px-5 py-3.5 text-gray-500 text-xs">{(inv as any).creator_name || <span className="text-gray-300 italic">—</span>}</td>
                     <td className="px-5 py-3.5 font-semibold text-litmus-black">{formatMoney(inv.total)}</td>
                     <td className="px-5 py-3.5">
                       <span className={`badge ${statusStyles[inv.status] || 'bg-gray-100 text-gray-800'}`}>
@@ -976,7 +1040,7 @@ export default function Invoices() {
                   <div
                     style={{
                       transform: 'rotate(-35deg)',
-                      fontSize: '52px',
+                      fontSize: '44px',
                       fontWeight: 900,
                       color: 'rgba(193,18,31,0.055)',
                       whiteSpace: 'nowrap',
@@ -985,14 +1049,14 @@ export default function Invoices() {
                       pointerEvents: 'none',
                     }}
                   >
-                    LITMUS SOLUTIONS
+                    LITMUS TECH SOLUTIONS
                   </div>
                 </div>
 
-                {/* INVOICE banner */}
+                {/* Document type banner */}
                 <div className="absolute top-0 right-8 bg-litmus-red text-white py-2.5 px-5 font-bold text-center rounded-b-md shadow-sm" style={{ zIndex: 1 }}>
-                  <div className="text-[7px] uppercase tracking-wider opacity-90">{docType === 'quotation' ? 'Quotation' : 'Invoice'}</div>
-                  <div className="text-[10px] font-extrabold">{invoiceNumber || (docType === 'quotation' ? 'QTN-2026-000' : 'INV-2026-000')}</div>
+                  <div className="text-[7px] uppercase tracking-wider opacity-90">{docType === 'quotation' ? 'Quotation' : docType === 'receipt' ? 'Receipt' : 'Invoice'}</div>
+                  <div className="text-[10px] font-extrabold">{invoiceNumber || (docType === 'quotation' ? 'QTN-2026-000' : docType === 'receipt' ? 'RCT-2026-000' : 'INV-2026-000')}</div>
                 </div>
 
                 {/* Company details */}
@@ -1004,8 +1068,8 @@ export default function Invoices() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                   <div>
-                    <h4 className="text-xs font-bold text-gray-900 leading-none">Litmus Solutions</h4>
-                    <p className="text-[8px] text-gray-400 mt-1">Cyber Services &amp; Laptop Store</p>
+                    <h4 className="text-xs font-bold text-gray-900 leading-none">Litmus Tech Solutions</h4>
+                    <p className="text-[8px] text-gray-400 mt-1">Technology for You</p>
                   </div>
                 </div>
 
@@ -1013,10 +1077,10 @@ export default function Invoices() {
                 <div className="grid grid-cols-2 gap-6 border-t border-b border-gray-100 py-4 mb-6">
                   <div className="space-y-0.5">
                     <span className="text-[8px] text-gray-400 font-bold uppercase block tracking-wider mb-1.5">From:</span>
-                    <div className="font-bold text-gray-850 text-[9px]">Litmus Solutions</div>
-                    <div className="text-gray-500">Cyber Services &amp; Laptop Store</div>
-                    <div className="text-gray-500">P.o Box 33058-30100 Eldoret-Kenya</div>
-                    <div className="text-gray-500">Phone: +254 723 005 182</div>
+                    <div className="font-bold text-gray-850 text-[9px]">Litmus Tech Solutions</div>
+                    <div className="text-gray-500">Technology for You</div>
+                    <div className="text-gray-500">P.O Box 33058-30100 Eldoret-Kenya</div>
+                    <div className="text-gray-500">Phone: +254 723 005 182 / 0706 085 261</div>
                     <div className="text-gray-500">Email: info@litmussolutions.co.ke</div>
                     <div className="text-gray-500">Website: www.litmussolutions.co.ke</div>
                   </div>
@@ -1135,21 +1199,13 @@ export default function Invoices() {
                       </div>
                     </div>
 
-                    {/* Authorized Signature */}
-                    <div className="text-right pt-1.5">
-                      <div className="font-semibold text-gray-400 text-[7px] uppercase tracking-wide mb-1">Authorized Signature</div>
-                      <svg width="75" height="25" viewBox="0 0 100 40" className="inline-block text-gray-800">
-                        <path
-                          d="M10 25 C 20 5, 25 35, 35 15 C 45 -5, 50 40, 60 20 C 70 5, 75 30, 90 10"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <div className="border-t border-gray-200 mt-1 w-20 ml-auto" />
-                    </div>
-
+                    {/* Served By */}
+                    {previewInvoice && (previewInvoice as any).served_by_name && (
+                      <div className="text-[8px] pt-2 text-gray-500">
+                        <span className="font-bold text-gray-600">Served By:</span>{' '}
+                        <span className="text-litmus-red font-semibold">{(previewInvoice as any).served_by_name}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1160,7 +1216,7 @@ export default function Invoices() {
                     <span>Twitter</span>
                     <span>WhatsApp</span>
                   </div>
-                  <span className="font-bold">Powered by Litmus Solutions</span>
+                  <span className="font-bold">Powered by Litmus Tech Solutions</span>
                 </div>
 
               </div>

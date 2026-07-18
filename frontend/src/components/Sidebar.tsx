@@ -46,12 +46,12 @@ const navItems = [
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
 
-  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const isOwner = user?.role === 'owner';
   const userPermissions: string[] = user?.permissions || [];
 
   const visibleItems = navItems.filter((item) => {
     if (!item.permission) return true;
-    if (isOwnerOrAdmin) return true;
+    if (isOwner) return true;
     return userPermissions.includes(item.permission);
   });
 
@@ -61,15 +61,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } h-screen shrink-0`}
     >
-      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-center relative">
         <img
           src={litmusLogo}
-          className="h-12 max-h-12 object-contain"
+          className="h-16 w-full object-contain px-3 py-1"
           alt="Litmus Logo"
         />
         <button
           onClick={onClose}
-          className="md:hidden p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition"
+          className="md:hidden absolute right-4 p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition"
         >
           <X size={18} />
         </button>
