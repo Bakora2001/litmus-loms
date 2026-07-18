@@ -73,6 +73,7 @@ export default function Sales() {
     unit_price: 0,
     quantity: 1,
     due_date: '',
+    amount_paid: 0,
   });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -146,6 +147,7 @@ export default function Sales() {
       unit_price: Number(t.unit_price || 0),
       quantity: Number(t.quantity || 1),
       due_date: t.due_date ? t.due_date.slice(0, 10) : '',
+      amount_paid: Number(t.amount_paid || 0),
     });
   }
 
@@ -349,6 +351,10 @@ export default function Sales() {
           <div>
             <label className="label-sm">Due Date (for credit sales)</label>
             <input type="date" className="input-field" value={editForm.due_date} onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })} />
+          </div>
+          <div>
+            <label className="label-sm">Amount Paid (KES) *</label>
+            <input type="number" required min={0} className="input-field" value={editForm.amount_paid} onChange={(e) => setEditForm({ ...editForm, amount_paid: Number(e.target.value) })} />
           </div>
 
           <div className="bg-gray-50 p-3 rounded-lg flex items-center justify-between font-bold text-sm">

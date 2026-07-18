@@ -63,6 +63,7 @@ export default function CyberServices() {
   const [paymentStatus, setPaymentStatus] = useState<'paid' | 'not_paid'>('paid');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [notes, setNotes] = useState('');
+  const [customServiceName, setCustomServiceName] = useState('');
 
   // Customer search
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,6 +103,7 @@ export default function CyberServices() {
         const printing = res.data.find((s: any) => s.name.toLowerCase() === 'printing');
         const defaultService = printing || res.data[0];
         setSelectedService(defaultService);
+        setCustomServiceName(defaultService.name);
         setPrice(Number(defaultService.default_price));
       }
     });
@@ -196,8 +198,8 @@ export default function CyberServices() {
       const paidVal = paymentStatus === 'paid' ? totalAmount : 0;
       const payload = {
         module: 'cyber_service',
-        service_id: selectedService.id,
-        description: selectedService.name + (description ? ` - ${description}` : ''),
+        service_id: selectedService?.id || null,
+        description: (customServiceName || selectedService?.name || 'Service') + (description ? ` - ${description}` : ''),
         quantity,
         unit_price: price,
         payment_status: paymentStatus === 'paid' ? 'paid' : 'not_paid',
@@ -432,8 +434,10 @@ export default function CyberServices() {
                     return (
                       <button
                         key={s.id}
+                        type="button"
                         onClick={() => {
                           setSelectedService(s);
+                          setCustomServiceName(s.name);
                           setPrice(Number(s.default_price));
                         }}
                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition ${
@@ -457,11 +461,13 @@ export default function CyberServices() {
                 <h3 className="font-bold text-litmus-black text-sm">3. Service Details</h3>
                 
                 <div>
-                  <label className="label-sm">Service Name</label>
+                  <label className="label-sm">Service Name * (type any service name)</label>
                   <input
-                    value={selectedService?.name || ''}
-                    disabled
-                    className="input-field bg-gray-50 font-bold text-xs"
+                    value={customServiceName}
+                    onChange={(e) => setCustomServiceName(e.target.value)}
+                    placeholder="Type or select service name..."
+                    className="input-field font-bold text-xs"
+                    required
                   />
                 </div>
 
