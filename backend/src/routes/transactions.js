@@ -252,7 +252,7 @@ router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { description, unit_price, quantity, due_date } = req.body;
+    const { description, unit_price, quantity, due_date, amount_paid, customer_id } = req.body;
 
     const tx = await pool.query('SELECT * FROM transactions WHERE id = $1', [id]);
     if (!tx.rows[0]) return res.status(404).json({ message: 'Transaction not found.' });
@@ -260,8 +260,9 @@ router.patch(
     const newUnitPrice = unit_price !== undefined ? Number(unit_price) : Number(tx.rows[0].unit_price);
     const newQty = quantity !== undefined ? Number(quantity) : Number(tx.rows[0].quantity);
     const newTotal = newUnitPrice * newQty;
-    const currentPaid = Number(tx.rows[0].amount_paid);
-    const newStatus = computeStatus(newTotal, currentPaid);
+    const newAmountPaid = amount_paid !== undefined ? Number(amount_paid) : Number(tx.rows[0].amount_paid);
+    const newStatus = computeStatus(newTotal, newAmountPaid);
+    const newBalance = Math.max(0, newTotal - newAmountPaid);
 
     const { rows } = await pool.query(
       `UPDATE transactions SET
@@ -269,12 +270,28 @@ router.patch(
         unit_price = $2,
         quantity = $3,
         total_amount = $4,
-        status = $5,
-        due_date = COALESCE($6, due_date),
+        amount_paid = $5,
+        balance = $6,
+        status = $7,
+        due_date = COALESCE($8, due_date),
+        customer_id = COALESCE($9, customer_id),
         updated_at = NOW()
-       WHERE id = $7 RETURNING *`,
-      [description || null, newUnitPrice, newQty, newTotal, newStatus, due_date || null, id]
+       WHERE id = $10 RETURNING *`,
+      [description || null, newUnitPrice, newQty, newTotal, newAmountPaid, newBalance, newStatus, due_date || null, customer_id || null, id]
     );
+
+    // Sync payments table if amount_paid is updated
+    if (amount_paid !== undefined) {
+      await pool.query('DELETE FROM payments WHERE transaction_id = $1', [id]);
+      if (newAmountPaid > 0) {
+        await pool.query(
+          `INSERT INTO payments (transaction_id, amount, method, received_by)
+           VALUES ($1, $2, 'cash', $3)`,
+          [id, newAmountPaid, tx.rows[0].served_by]
+        );
+      }
+    }
+
     res.json(rows[0]);
   })
 );
