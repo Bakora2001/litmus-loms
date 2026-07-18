@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS products (
   min_stock     INTEGER DEFAULT 3,
   warranty      VARCHAR(80),
   image_url     TEXT,
+  serial_number VARCHAR(100),
   is_active     BOOLEAN DEFAULT TRUE,
   created_at    TIMESTAMPTZ DEFAULT NOW(),
   updated_at    TIMESTAMPTZ DEFAULT NOW()
@@ -179,6 +180,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   discount       NUMERIC(12,2) DEFAULT 0,
   total          NUMERIC(12,2) DEFAULT 0,
   status         VARCHAR(20) DEFAULT 'unpaid' CHECK (status IN ('unpaid','paid','overdue','draft')),
+  type           VARCHAR(20) DEFAULT 'invoice' CHECK (type IN ('invoice','quotation')),
   terms          TEXT,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -245,6 +247,30 @@ CREATE TABLE IF NOT EXISTS notifications (
   is_read     BOOLEAN DEFAULT FALSE,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ---------------------------------------------------------
+-- BRANDING SERVICES
+-- ---------------------------------------------------------
+CREATE TABLE IF NOT EXISTS branding_jobs (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id   UUID REFERENCES customers(id) ON DELETE SET NULL,
+  job_type      VARCHAR(100) NOT NULL,
+  description   TEXT,
+  artwork_url   TEXT,
+  status        VARCHAR(30) DEFAULT 'Pending' CHECK (status IN ('Pending','Designing','Printing','Completed','Delivered','Cancelled')),
+  quantity      INTEGER NOT NULL DEFAULT 1,
+  unit_cost     NUMERIC(12,2) DEFAULT 0,
+  selling_price NUMERIC(12,2) DEFAULT 0,
+  materials_used TEXT,
+  due_date      DATE,
+  notes         TEXT,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Add missing columns if upgrading from older schema
+ALTER TABLE branding_jobs ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE branding_jobs ADD COLUMN IF NOT EXISTS notes TEXT;
 
 -- ---------------------------------------------------------
 -- SETTINGS (single row business profile)

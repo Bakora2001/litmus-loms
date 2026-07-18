@@ -48,6 +48,7 @@ router.post(
       sku, barcode, name, category, brand,
       buying_price, selling_price, supplier,
       quantity, min_stock, warranty, image_url,
+      serial_number,
     } = req.body;
 
     if (!name || !category || selling_price === undefined) {
@@ -55,9 +56,9 @@ router.post(
     }
 
     const { rows } = await pool.query(
-      `INSERT INTO products (sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [sku, barcode, name, category, brand, buying_price || 0, selling_price, supplier, quantity || 0, min_stock || 3, warranty, image_url]
+      `INSERT INTO products (sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, serial_number)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [sku, barcode, name, category, brand, buying_price || 0, selling_price, supplier, quantity || 0, min_stock || 3, warranty, image_url, serial_number]
     );
     res.status(201).json(rows[0]);
   })
@@ -71,6 +72,7 @@ router.put(
       sku, barcode, name, category, brand,
       buying_price, selling_price, supplier,
       quantity, min_stock, warranty, image_url,
+      serial_number,
     } = req.body;
 
     const { rows } = await pool.query(
@@ -80,9 +82,9 @@ router.put(
         buying_price = COALESCE($6, buying_price), selling_price = COALESCE($7, selling_price),
         supplier = COALESCE($8, supplier), quantity = COALESCE($9, quantity),
         min_stock = COALESCE($10, min_stock), warranty = COALESCE($11, warranty),
-        image_url = COALESCE($12, image_url), updated_at = NOW()
-       WHERE id = $13 RETURNING *`,
-      [sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, id]
+        image_url = COALESCE($12, image_url), serial_number = COALESCE($13, serial_number), updated_at = NOW()
+       WHERE id = $14 RETURNING *`,
+      [sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, serial_number, id]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Product not found.' });
     res.json(rows[0]);

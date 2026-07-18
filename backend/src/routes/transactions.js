@@ -58,10 +58,16 @@ router.get(
   })
 );
 
-// Debt tracker - all outstanding balances grouped by customer
+// Debt tracker - all outstanding balances grouped by customer (with optional date filter)
 router.get(
   '/debts/summary',
   asyncHandler(async (req, res) => {
+    const { from, to } = req.query;
+    const clauses = ["t.status != 'paid'"];
+    const params = [];
+    if (from) { params.push(from); clauses.push(`t.created_at >= $${params.length}`); }
+    if (to)   { params.push(to);   clauses.push(`t.created_at <= $${params.length}`); }
+    const where = `WHERE ${clauses.join(' AND ')}`;
     const { rows } = await pool.query(
       `SELECT c.id AS customer_id, c.name, c.phone,
         SUM(t.balance) AS total_balance,
@@ -69,10 +75,11 @@ router.get(
         MIN(t.due_date) AS earliest_due_date
        FROM transactions t
        JOIN customers c ON c.id = t.customer_id
-       WHERE t.status != 'paid'
+       ${where}
        GROUP BY c.id, c.name, c.phone
        HAVING SUM(t.balance) > 0
-       ORDER BY total_balance DESC`
+       ORDER BY total_balance DESC`,
+      params
     );
     res.json(rows);
   })

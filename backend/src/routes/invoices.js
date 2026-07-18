@@ -19,10 +19,11 @@ async function nextInvoiceNumber() {
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { status } = req.query;
+    const { status, type = 'invoice' } = req.query;
     const clauses = [];
     const params = [];
     if (status) { params.push(status); clauses.push(`i.status = $${params.length}`); }
+    if (type) { params.push(type); clauses.push(`i.type = $${params.length}`); }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
     const { rows } = await pool.query(
@@ -53,7 +54,7 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { customer_id, due_date, items = [], discount = 0, vat_rate, terms } = req.body;
+    const { customer_id, due_date, items = [], discount = 0, vat_rate, terms, type = 'invoice' } = req.body;
     if (!customer_id || !items.length) {
       return res.status(400).json({ message: 'customer_id and at least one item are required.' });
     }
@@ -68,11 +69,76 @@ router.post(
     const invoiceNumber = await nextInvoiceNumber();
 
     const { rows } = await pool.query(
-      `INSERT INTO invoices (invoice_number, customer_id, due_date, items, subtotal, vat, discount, total, terms)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [invoiceNumber, customer_id, due_date || null, JSON.stringify(items), subtotal, vat, discount, total, terms]
+      `INSERT INTO invoices (invoice_number, customer_id, due_date, items, subtotal, vat, discount, total, terms, type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [invoiceNumber, customer_id, due_date || null, JSON.stringify(items), subtotal, vat, discount, total, terms, type]
     );
     res.status(201).json(rows[0]);
+  })
+);
+
+// Full update of an invoice (required for quotations editing)
+router.put(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { customer_id, due_date, items = [], discount = 0, vat_rate, terms, status, type } = req.body;
+    const settings = await pool.query('SELECT tax_rate FROM settings WHERE id = 1');
+    const rate = vat_rate !== undefined ? vat_rate : Number(settings.rows[0]?.tax_rate || 0);
+
+    const subtotal = items.reduce((sum, it) => sum + Number(it.qty) * Number(it.price), 0);
+    const vat = (subtotal - discount) * (rate / 100);
+    const total = subtotal - discount + vat;
+
+    const { rows } = await pool.query(
+      `UPDATE invoices SET
+        customer_id = COALESCE($1, customer_id),
+        due_date = COALESCE($2, due_date),
+        items = COALESCE($3, items),
+        subtotal = $4,
+        vat = $5,
+        discount = $6,
+        total = $7,
+        terms = COALESCE($8, terms),
+        status = COALESCE($9, status),
+        type = COALESCE($10, type)
+       WHERE id = $11 RETURNING *`,
+      [customer_id, due_date || null, JSON.stringify(items), subtotal, vat, discount, total, terms, status, type, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ message: 'Invoice/Quotation not found.' });
+    res.json(rows[0]);
+  })
+);
+
+// Convert quotation to invoice & register transactions
+router.post(
+  '/:id/convert-to-invoice',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const qRes = await pool.query('SELECT * FROM invoices WHERE id = $1', [id]);
+    const quotation = qRes.rows[0];
+    if (!quotation) return res.status(404).json({ message: 'Quotation not found.' });
+    if (quotation.type !== 'quotation') return res.status(400).json({ message: 'Only quotations can be converted.' });
+
+    const { rows } = await pool.query(
+      `UPDATE invoices SET type = 'invoice', status = 'unpaid' WHERE id = $1 RETURNING *`,
+      [id]
+    );
+
+    const items = quotation.items || [];
+    const customerId = quotation.customer_id;
+    const activeServedBy = req.user?.id || null;
+
+    for (const item of items) {
+      const total = Number(item.qty || 1) * Number(item.price || 0);
+      await pool.query(
+        `INSERT INTO transactions
+          (customer_id, module, description, quantity, unit_price, total_amount, amount_paid, status, served_by, due_date)
+         VALUES ($1, 'cyber_service', $2, $3, $4, $5, 0, 'pending', $6, $7)`,
+        [customerId, item.name + (item.description ? ` - ${item.description}` : ''), item.qty || 1, item.price || 0, total, activeServedBy, quotation.due_date]
+      );
+    }
+
+    res.json(rows[0]);
   })
 );
 
@@ -113,9 +179,22 @@ router.get(
     // 1. Red top border bar
     doc.rect(0, 0, 595, 12).fill('#C1121F');
 
+    // 1b. Diagonal watermark in the centre of the page
+    doc.save();
+    doc.opacity(0.05);
+    doc.fillColor('#C1121F').fontSize(60).font('Helvetica-Bold');
+    const wmText = 'LITMUS SOLUTIONS';
+    const wmWidth = doc.widthOfString(wmText);
+    // Centre of A4 (595x842), rotate -35 degrees
+    doc.translate(595 / 2, 842 / 2);
+    doc.rotate(-35, { origin: [0, 0] });
+    doc.text(wmText, -wmWidth / 2, -30, { lineBreak: false });
+    doc.restore();
+    doc.opacity(1);
+
     // 2. Red INVOICE banner on top-right
     doc.rect(595 - 130, 12, 100, 45).fill('#C1121F');
-    doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text('INVOICE', 595 - 120, 20);
+    doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(invoice.type === 'quotation' ? 'QUOTATION' : 'INVOICE', 595 - 120, 20);
     doc.fontSize(10).text(invoice.invoice_number, 595 - 120, 32);
 
     // 3. Branded corporate header on top-left
@@ -150,7 +229,7 @@ router.get(
     }
     
     // Dates
-    doc.fillColor('#555555').fontSize(8).text(`Invoice Date: ${new Date(invoice.issue_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, 310, startY + 48);
+    doc.fillColor('#555555').fontSize(8).text(`${invoice.type === 'quotation' ? 'Quotation' : 'Invoice'} Date: ${new Date(invoice.issue_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, 310, startY + 48);
     if (invoice.due_date) {
       doc.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, 310, startY + 58);
     }

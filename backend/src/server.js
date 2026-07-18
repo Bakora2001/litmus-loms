@@ -15,6 +15,7 @@ import expenseRoutes from './routes/expenses.js';
 import reportRoutes from './routes/reports.js';
 import settingsRoutes from './routes/settings.js';
 import dashboardRoutes from './routes/dashboard.js';
+import brandingRoutes from './routes/branding.js';
 import { requireAuth } from './middleware/auth.js';
 
 dotenv.config();
@@ -69,6 +70,7 @@ app.use('/api/sms', requireAuth, smsRoutes);
 app.use('/api/expenses', requireAuth, expenseRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
 app.use('/api/settings', requireAuth, settingsRoutes);
+app.use('/api/branding', requireAuth, brandingRoutes);
 
 // 404
 app.use((req, res) => {
