@@ -88,4 +88,22 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`✅ Litmus LOMS API running on http://localhost:${PORT}`);
+
+  // Keep-alive self-pinging every 8 minutes
+  const pingUrl = process.env.RENDER_EXTERNAL_URL || process.env.BACKEND_URL || `http://localhost:${PORT}`;
+  console.log(`[Keep-Alive] Configured to ping ${pingUrl}/api/health every 8 minutes.`);
+  
+  setInterval(() => {
+    const fullUrl = `${pingUrl}/api/health`;
+    const protocol = fullUrl.startsWith('https') ? import('https') : import('http');
+    protocol.then((client) => {
+      client.get(fullUrl, (res) => {
+        // Ping succeeded
+      }).on('error', (err) => {
+        console.error(`[Keep-Alive] Error:`, err.message);
+      });
+    }).catch((err) => {
+      console.error(`[Keep-Alive] Import error:`, err.message);
+    });
+  }, 8 * 60 * 1000);
 });
