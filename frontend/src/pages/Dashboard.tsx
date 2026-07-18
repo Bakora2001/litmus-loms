@@ -175,16 +175,32 @@ export default function Dashboard() {
   function revenueChartData() {
     let baseData = [];
     if (revenue.this_month && revenue.this_month.length > 0) {
-      baseData = revenue.this_month.map((row: any, idx: number) => ({
-        day: new Date(row.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
-        thisMonth: Number(row.revenue),
-        lastMonth: Number(revenue.last_month?.[idx]?.revenue || 0),
-      }));
+      // Find the first day to label the start
+      const firstDayStr = revenue.this_month[0]?.day;
+      let startLabel = 'Start';
+      if (firstDayStr) {
+        const d = new Date(firstDayStr);
+        d.setDate(1); // Set to 1st of month
+        startLabel = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      }
+
+      baseData = [
+        {
+          day: startLabel,
+          thisMonth: 0,
+          lastMonth: 0
+        },
+        ...revenue.this_month.map((row: any, idx: number) => ({
+          day: new Date(row.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+          thisMonth: Number(row.revenue),
+          lastMonth: Number(revenue.last_month?.[idx]?.revenue || 0),
+        }))
+      ];
     } else {
-      // High fidelity default chart mock data for display
-      const days = ['01 Jun', '05 Jun', '10 Jun', '15 Jun', '20 Jun', '25 Jun', '30 Jun'];
-      const thisMonthVals = [8500, 11200, 15400, 21800, 24500, 29200, 36000];
-      const lastMonthVals = [6200, 9100, 12000, 13500, 17800, 19200, 22400];
+      // High fidelity default chart mock data for display starting from 0
+      const days = ['Start', '01 Jun', '05 Jun', '10 Jun', '15 Jun', '20 Jun', '25 Jun', '30 Jun'];
+      const thisMonthVals = [0, 8500, 11200, 15400, 21800, 24500, 29200, 36000];
+      const lastMonthVals = [0, 6200, 9100, 12000, 13500, 17800, 19200, 22400];
       baseData = days.map((day, i) => ({
         day,
         thisMonth: thisMonthVals[i],

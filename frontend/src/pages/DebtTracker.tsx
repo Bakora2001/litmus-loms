@@ -18,24 +18,29 @@ type Period = 'today' | 'week' | 'month' | 'last_month' | 'custom';
 
 function getPeriodDates(period: Period, customFrom: string, customTo: string): { from: string; to: string } {
   const now = new Date();
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  const toLocalString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   if (period === 'today') {
-    const t = toISO(now);
+    const t = toLocalString(now);
     return { from: t, to: t };
   }
   if (period === 'week') {
     const start = new Date(now);
     start.setDate(now.getDate() - now.getDay());
-    return { from: toISO(start), to: toISO(now) };
+    return { from: toLocalString(start), to: toLocalString(now) };
   }
   if (period === 'month') {
-    return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: toISO(now) };
+    return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: toLocalString(now) };
   }
   if (period === 'last_month') {
     const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const last = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { from: toISO(first), to: toISO(last) };
+    return { from: toLocalString(first), to: toLocalString(last) };
   }
   if (period === 'custom' && customFrom && customTo) {
     return { from: customFrom, to: customTo };

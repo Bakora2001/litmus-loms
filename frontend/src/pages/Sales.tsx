@@ -31,28 +31,33 @@ interface Transaction {
 
 function getPeriodDates(period: Period, customFrom?: string, customTo?: string): { from: string; to: string } {
   const now = new Date();
-  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  const toLocalString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   if (period === 'custom' && customFrom && customTo) {
     return { from: customFrom, to: customTo };
   }
   if (period === 'today') {
-    const today = toISO(now);
+    const today = toLocalString(now);
     return { from: today, to: today };
   }
   if (period === 'week') {
     const start = new Date(now);
     start.setDate(now.getDate() - now.getDay());
-    return { from: toISO(start), to: toISO(now) };
+    return { from: toLocalString(start), to: toLocalString(now) };
   }
   if (period === 'month') {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { from: toISO(start), to: toISO(now) };
+    return { from: toLocalString(start), to: toLocalString(now) };
   }
   if (period === 'year') {
-    return { from: `${now.getFullYear()}-01-01`, to: toISO(now) };
+    return { from: `${now.getFullYear()}-01-01`, to: toLocalString(now) };
   }
-  return { from: toISO(now), to: toISO(now) };
+  return { from: toLocalString(now), to: toLocalString(now) };
 }
 
 export default function Sales() {
