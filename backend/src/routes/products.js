@@ -55,10 +55,13 @@ router.post(
       return res.status(400).json({ message: 'name, category and selling_price are required.' });
     }
 
+    const finalSku = sku && sku.trim() !== '' ? sku.trim() : null;
+    const finalBarcode = barcode && barcode.trim() !== '' ? barcode.trim() : null;
+
     const { rows } = await pool.query(
       `INSERT INTO products (sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, serial_number)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [sku, barcode, name, category, brand, buying_price || 0, selling_price, supplier, quantity || 0, min_stock || 3, warranty, image_url, serial_number]
+      [finalSku, finalBarcode, name, category, brand, buying_price || 0, selling_price, supplier, quantity || 0, min_stock || 3, warranty, image_url, serial_number]
     );
     res.status(201).json(rows[0]);
   })
@@ -75,6 +78,9 @@ router.put(
       serial_number,
     } = req.body;
 
+    const finalSku = sku !== undefined ? (sku && sku.trim() !== '' ? sku.trim() : null) : undefined;
+    const finalBarcode = barcode !== undefined ? (barcode && barcode.trim() !== '' ? barcode.trim() : null) : undefined;
+
     const { rows } = await pool.query(
       `UPDATE products SET
         sku = COALESCE($1, sku), barcode = COALESCE($2, barcode), name = COALESCE($3, name),
@@ -84,7 +90,7 @@ router.put(
         min_stock = COALESCE($10, min_stock), warranty = COALESCE($11, warranty),
         image_url = COALESCE($12, image_url), serial_number = COALESCE($13, serial_number), updated_at = NOW()
        WHERE id = $14 RETURNING *`,
-      [sku, barcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, serial_number, id]
+      [finalSku, finalBarcode, name, category, brand, buying_price, selling_price, supplier, quantity, min_stock, warranty, image_url, serial_number, id]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Product not found.' });
     res.json(rows[0]);

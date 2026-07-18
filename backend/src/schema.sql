@@ -14,11 +14,47 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(150) UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role          VARCHAR(30) NOT NULL DEFAULT 'attendant'
-                CHECK (role IN ('owner','admin','cashier','cyber_attendant','technician','accountant')),
+                CHECK (role IN ('owner','admin','attendant','cashier','cyber_attendant','technician','accountant')),
+  permissions   TEXT[] DEFAULT '{}',
   avatar_url    TEXT,
   is_active     BOOLEAN DEFAULT TRUE,
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add permissions and fix role constraint on existing DB (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='permissions') THEN
+    ALTER TABLE users ADD COLUMN permissions TEXT[] DEFAULT '{}';
+  END IF;
+END $$;
+
+-- Drop and recreate the user role check constraint to ensure 'attendant' is supported
+DO $$ BEGIN
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+  ALTER TABLE users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('owner','admin','attendant','cashier','cyber_attendant','technician','accountant'));
+END $$;
+
+-- Add created_by to invoices for filter-by-user feature
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='created_by') THEN
+    ALTER TABLE invoices ADD COLUMN created_by UUID REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- Add served_by to invoices so PDF can show who served
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='invoices' AND column_name='served_by') THEN
+    ALTER TABLE invoices ADD COLUMN served_by UUID REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- Add 'receipt' to invoices type check constraint (drop & recreate, idempotent)
+DO $$ BEGIN
+  ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_type_check;
+  ALTER TABLE invoices ADD CONSTRAINT invoices_type_check 
+    CHECK (type IN ('invoice','quotation','receipt'));
+END $$;
 
 -- ---------------------------------------------------------
 -- CUSTOMERS
@@ -180,7 +216,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   discount       NUMERIC(12,2) DEFAULT 0,
   total          NUMERIC(12,2) DEFAULT 0,
   status         VARCHAR(20) DEFAULT 'unpaid' CHECK (status IN ('unpaid','paid','overdue','draft')),
-  type           VARCHAR(20) DEFAULT 'invoice' CHECK (type IN ('invoice','quotation')),
+  type           VARCHAR(20) DEFAULT 'invoice' CHECK (type IN ('invoice','quotation','receipt')),
   terms          TEXT,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -277,7 +313,7 @@ ALTER TABLE branding_jobs ADD COLUMN IF NOT EXISTS notes TEXT;
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS settings (
   id             INTEGER PRIMARY KEY DEFAULT 1,
-  business_name  VARCHAR(150) DEFAULT 'Litmus Solutions',
+  business_name  VARCHAR(150) DEFAULT 'Litmus Tech Solutions',
   logo_url       TEXT,
   theme_primary  VARCHAR(10) DEFAULT '#C1121F',
   currency       VARCHAR(10) DEFAULT 'KES',

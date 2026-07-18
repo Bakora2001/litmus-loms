@@ -2,6 +2,11 @@ import { Router } from 'express';
 import PDFDocument from 'pdfkit';
 import { pool } from '../db.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const logoPath = path.join(__dirname, '../assets/litmus-logo.png');
 
 const router = Router();
 
@@ -19,17 +24,21 @@ async function nextInvoiceNumber() {
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const { status, type = 'invoice' } = req.query;
+    const { status, type = 'invoice', created_by, from_date, to_date } = req.query;
     const clauses = [];
     const params = [];
     if (status) { params.push(status); clauses.push(`i.status = $${params.length}`); }
     if (type) { params.push(type); clauses.push(`i.type = $${params.length}`); }
+    if (created_by) { params.push(created_by); clauses.push(`i.created_by = $${params.length}`); }
+    if (from_date) { params.push(from_date); clauses.push(`i.issue_date >= $${params.length}`); }
+    if (to_date) { params.push(to_date); clauses.push(`i.issue_date <= $${params.length}`); }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone
+      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone, u.name AS creator_name
        FROM invoices i
        LEFT JOIN customers c ON c.id = i.customer_id
+       LEFT JOIN users u ON u.id = i.created_by
        ${where}
        ORDER BY i.created_at DESC`,
       params
@@ -42,8 +51,11 @@ router.get(
   '/:id',
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email
-       FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = $1`,
+      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone, c.email AS customer_email, u.name AS creator_name
+       FROM invoices i 
+       LEFT JOIN customers c ON c.id = i.customer_id 
+       LEFT JOIN users u ON u.id = i.created_by
+       WHERE i.id = $1`,
       [req.params.id]
     );
     if (!rows[0]) return res.status(404).json({ message: 'Invoice not found.' });
@@ -67,11 +79,12 @@ router.post(
     const total = subtotal - discount + vat;
 
     const invoiceNumber = await nextInvoiceNumber();
+    const createdBy = req.user?.id || null;
 
     const { rows } = await pool.query(
-      `INSERT INTO invoices (invoice_number, customer_id, due_date, items, subtotal, vat, discount, total, terms, type)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [invoiceNumber, customer_id, due_date || null, JSON.stringify(items), subtotal, vat, discount, total, terms, type]
+      `INSERT INTO invoices (invoice_number, customer_id, due_date, items, subtotal, vat, discount, total, terms, type, created_by, served_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      [invoiceNumber, customer_id, due_date || null, JSON.stringify(items), subtotal, vat, discount, total, terms, type, createdBy, createdBy]
     );
     res.status(201).json(rows[0]);
   })
@@ -159,8 +172,12 @@ router.get(
   '/:id/pdf',
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone
-       FROM invoices i LEFT JOIN customers c ON c.id = i.customer_id WHERE i.id = $1`,
+      `SELECT i.*, c.name AS customer_name, c.phone AS customer_phone,
+              u.name AS served_by_name
+       FROM invoices i 
+       LEFT JOIN customers c ON c.id = i.customer_id 
+       LEFT JOIN users u ON u.id = i.served_by
+       WHERE i.id = $1`,
       [req.params.id]
     );
     const invoice = rows[0];
@@ -183,7 +200,7 @@ router.get(
     doc.save();
     doc.opacity(0.05);
     doc.fillColor('#C1121F').fontSize(60).font('Helvetica-Bold');
-    const wmText = 'LITMUS SOLUTIONS';
+    const wmText = 'LITMUS TECH SOLUTIONS';
     const wmWidth = doc.widthOfString(wmText);
     // Centre of A4 (595x842), rotate -35 degrees
     doc.translate(595 / 2, 842 / 2);
@@ -192,18 +209,24 @@ router.get(
     doc.restore();
     doc.opacity(1);
 
-    // 2. Red INVOICE banner on top-right
-    doc.rect(595 - 130, 12, 100, 45).fill('#C1121F');
-    doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(invoice.type === 'quotation' ? 'QUOTATION' : 'INVOICE', 595 - 120, 20);
+    // 2. Red document-type banner on top-right
+    const docTypeLabel = invoice.type === 'quotation' ? 'QUOTATION' : invoice.type === 'receipt' ? 'RECEIPT' : 'INVOICE';
+    doc.rect(595 - 130, 12, 105, 45).fill('#C1121F');
+    doc.fillColor('#FFFFFF').fontSize(8).font('Helvetica-Bold').text(docTypeLabel, 595 - 120, 20);
     doc.fontSize(10).text(invoice.invoice_number, 595 - 120, 32);
 
     // 3. Branded corporate header on top-left
-    // Draw small logo box
-    doc.rect(40, 35, 30, 30).fill('#121212');
-    doc.fillColor('#C1121F').fontSize(16).font('Helvetica-Bold').text('L', 50, 42);
+    // Embed the Litmus Logo
+    try {
+      doc.image(logoPath, 40, 24, { width: 35 });
+    } catch (e) {
+      // Fallback L box
+      doc.rect(40, 35, 30, 30).fill('#121212');
+      doc.fillColor('#C1121F').fontSize(16).font('Helvetica-Bold').text('L', 50, 42);
+    }
     // Draw company titles
-    doc.fillColor('#121212').fontSize(12).font('Helvetica-Bold').text(settings.business_name || 'Litmus Solutions', 80, 38);
-    doc.fillColor('#777777').fontSize(8).font('Helvetica').text('Cyber Services & Laptop Store', 80, 52);
+    doc.fillColor('#121212').fontSize(12).font('Helvetica-Bold').text('Litmus Tech Solutions', 80, 32);
+    doc.fillColor('#777777').fontSize(8).font('Helvetica').text('Technology for You', 80, 46);
 
     doc.y = 85;
 
@@ -211,10 +234,10 @@ router.get(
     const startY = doc.y;
     // LEFT: From Details
     doc.fillColor('#999999').fontSize(8).font('Helvetica-Bold').text('FROM:', 40, startY);
-    doc.fillColor('#121212').fontSize(9).font('Helvetica-Bold').text(settings.business_name || 'Litmus Solutions', 40, startY + 12);
-    doc.fillColor('#555555').fontSize(8).font('Helvetica').text('Cyber Services & Laptop Store', 40, startY + 24);
-    doc.text('P.O Box 12345, Nairobi, Kenya', 40, startY + 34);
-    doc.text('Phone: 0722 123 456', 40, startY + 44);
+    doc.fillColor('#121212').fontSize(9).font('Helvetica-Bold').text('Litmus Tech Solutions', 40, startY + 12);
+    doc.fillColor('#555555').fontSize(8).font('Helvetica').text('Technology for You', 40, startY + 24);
+    doc.text('P.O Box 33058-30100 Eldoret-Kenya', 40, startY + 34);
+    doc.text('Phone: +254 723 005 182 / 0706 085 261', 40, startY + 44);
     doc.text('Email: info@litmussolutions.co.ke', 40, startY + 54);
     doc.text('Website: www.litmussolutions.co.ke', 40, startY + 64);
 
@@ -275,7 +298,13 @@ router.get(
     // Notes & terms (Left side)
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#555555').text('Notes & Terms:', 40, endOfTableY);
     doc.font('Helvetica').fillColor('#777777').fontSize(7);
-    doc.text(invoice.terms || 'Thank you for choosing Litmus Solutions.', 40, endOfTableY + 12, { width: 230 });
+    doc.text(invoice.terms || 'Thank you for choosing Litmus Tech Solutions.', 40, endOfTableY + 12, { width: 230 });
+
+    // Served By row (below notes)
+    if (invoice.served_by_name) {
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#555555').text('Served By:', 40, endOfTableY + 46);
+      doc.font('Helvetica').fillColor('#C1121F').text(invoice.served_by_name, 88, endOfTableY + 46);
+    }
 
     // Summary block (Right side)
     const summaryX = 330;
@@ -294,22 +323,9 @@ router.get(
     doc.fillColor('#FFFFFF').fontSize(9).font('Helvetica-Bold').text('Total:', summaryX + 8, endOfTableY + 50);
     doc.text(`KES ${Number(invoice.total).toFixed(2)}`, summaryX + 105, endOfTableY + 50, { align: 'right', width: 110 });
 
-    // Authorized Signature
-    const sigY = endOfTableY + 80;
-    doc.fillColor('#777777').fontSize(7).font('Helvetica-Bold').text('AUTHORIZED SIGNATURE', 450, sigY);
-    
-    // Draw handwriting script path
-    doc.moveTo(450, sigY + 15)
-       .bezierCurveTo(460, sigY + 5, 465, sigY + 30, 475, sigY + 10)
-       .bezierCurveTo(485, sigY - 5, 490, sigY + 35, 500, sigY + 15)
-       .bezierCurveTo(510, sigY + 5, 515, sigY + 25, 530, sigY + 10)
-       .strokeColor('#121212').stroke();
-
-    doc.moveTo(450, sigY + 30).lineTo(540, sigY + 30).strokeColor('#E5E7EB').stroke();
-
     // 7. Footer bar
     doc.rect(0, 842 - 25, 595, 25).fill('#C1121F');
-    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Powered by Litmus Solutions', 40, 842 - 16);
+    doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Powered by Litmus Tech Solutions', 40, 842 - 16);
     doc.text('Facebook  |  Twitter  |  WhatsApp', 400, 842 - 16, { align: 'right', width: 155 });
 
     doc.end();
