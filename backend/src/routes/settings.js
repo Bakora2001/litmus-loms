@@ -16,7 +16,7 @@ router.get(
 router.put(
   '/',
   asyncHandler(async (req, res) => {
-    const { business_name, logo_url, theme_primary, currency, tax_rate, sender_id, invoice_prefix } = req.body;
+    const { business_name, logo_url, theme_primary, currency, tax_rate, sender_id, invoice_prefix, expense_categories } = req.body;
     const { rows } = await pool.query(
       `UPDATE settings SET
         business_name = COALESCE($1, business_name),
@@ -25,9 +25,10 @@ router.put(
         currency = COALESCE($4, currency),
         tax_rate = COALESCE($5, tax_rate),
         sender_id = COALESCE($6, sender_id),
-        invoice_prefix = COALESCE($7, invoice_prefix)
+        invoice_prefix = COALESCE($7, invoice_prefix),
+        expense_categories = COALESCE($8, expense_categories)
        WHERE id = 1 RETURNING *`,
-      [business_name, logo_url, theme_primary, currency, tax_rate, sender_id, invoice_prefix]
+      [business_name, logo_url, theme_primary, currency, tax_rate, sender_id, invoice_prefix, expense_categories]
     );
     res.json(rows[0]);
   })

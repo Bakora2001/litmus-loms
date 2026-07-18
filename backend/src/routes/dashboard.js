@@ -8,10 +8,12 @@ router.get(
   '/summary',
   asyncHandler(async (req, res) => {
     const todayRevenue = await pool.query(
-      `SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions WHERE created_at::date = CURRENT_DATE`
+      `SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions 
+       WHERE (created_at AT TIME ZONE 'Africa/Nairobi')::date = (NOW() AT TIME ZONE 'Africa/Nairobi')::date`
     );
     const yesterdayRevenue = await pool.query(
-      `SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions WHERE created_at::date = CURRENT_DATE - INTERVAL '1 day'`
+      `SELECT COALESCE(SUM(amount_paid),0) AS total FROM transactions 
+       WHERE (created_at AT TIME ZONE 'Africa/Nairobi')::date = ((NOW() AT TIME ZONE 'Africa/Nairobi') - INTERVAL '1 day')::date`
     );
     const outstandingDebts = await pool.query(
       `SELECT COALESCE(SUM(balance),0) AS total, COUNT(DISTINCT customer_id) AS customers
@@ -24,10 +26,12 @@ router.get(
       `SELECT COUNT(*) FROM tasks WHERE priority IN ('high','critical') AND status NOT IN ('completed','cancelled')`
     );
     const completedTasks = await pool.query(
-      `SELECT COUNT(*) FROM tasks WHERE status = 'completed' AND updated_at::date = CURRENT_DATE`
+      `SELECT COUNT(*) FROM tasks 
+       WHERE status = 'completed' AND (updated_at AT TIME ZONE 'Africa/Nairobi')::date = (NOW() AT TIME ZONE 'Africa/Nairobi')::date`
     );
     const todaysCustomers = await pool.query(
-      `SELECT COUNT(DISTINCT customer_id) FROM transactions WHERE created_at::date = CURRENT_DATE`
+      `SELECT COUNT(DISTINCT customer_id) FROM transactions 
+       WHERE (created_at AT TIME ZONE 'Africa/Nairobi')::date = (NOW() AT TIME ZONE 'Africa/Nairobi')::date`
     );
     const lowStock = await pool.query(
       `SELECT COUNT(*) FROM products WHERE quantity <= min_stock AND is_active = TRUE`
@@ -51,16 +55,16 @@ router.get(
   '/revenue-overview',
   asyncHandler(async (req, res) => {
     const thisMonth = await pool.query(
-      `SELECT created_at::date AS day, SUM(amount_paid) AS revenue
+      `SELECT (created_at AT TIME ZONE 'Africa/Nairobi')::date AS day, SUM(amount_paid) AS revenue
        FROM transactions
-       WHERE created_at >= date_trunc('month', CURRENT_DATE)
+       WHERE created_at >= date_trunc('month', NOW() AT TIME ZONE 'Africa/Nairobi')
        GROUP BY day ORDER BY day`
     );
     const lastMonth = await pool.query(
-      `SELECT created_at::date AS day, SUM(amount_paid) AS revenue
+      `SELECT (created_at AT TIME ZONE 'Africa/Nairobi')::date AS day, SUM(amount_paid) AS revenue
        FROM transactions
-       WHERE created_at >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
-         AND created_at < date_trunc('month', CURRENT_DATE)
+       WHERE created_at >= date_trunc('month', NOW() AT TIME ZONE 'Africa/Nairobi') - INTERVAL '1 month'
+         AND created_at < date_trunc('month', NOW() AT TIME ZONE 'Africa/Nairobi')
        GROUP BY day ORDER BY day`
     );
     res.json({ this_month: thisMonth.rows, last_month: lastMonth.rows });
@@ -73,7 +77,7 @@ router.get(
     const { rows } = await pool.query(
       `SELECT sc.name, COUNT(t.id) AS count
        FROM transactions t JOIN service_catalog sc ON sc.id = t.service_id
-       WHERE t.module = 'cyber_service' AND t.created_at >= date_trunc('month', CURRENT_DATE)
+       WHERE t.module = 'cyber_service' AND t.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Africa/Nairobi')
        GROUP BY sc.name ORDER BY count DESC LIMIT 5`
     );
     res.json(rows);
@@ -86,7 +90,7 @@ router.get(
     const { rows } = await pool.query(
       `SELECT p.name, SUM(t.quantity) AS units, SUM(t.total_amount) AS revenue
        FROM transactions t JOIN products p ON p.id = t.product_id
-       WHERE t.module = 'product_sale' AND t.created_at >= date_trunc('month', CURRENT_DATE)
+       WHERE t.module = 'product_sale' AND t.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Africa/Nairobi')
        GROUP BY p.name ORDER BY revenue DESC LIMIT 5`
     );
     res.json(rows);

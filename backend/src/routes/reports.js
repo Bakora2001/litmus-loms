@@ -10,7 +10,7 @@ router.get(
     const { period = 'daily' } = req.query;
     const trunc = period === 'monthly' ? 'month' : period === 'weekly' ? 'week' : 'day';
     const { rows } = await pool.query(
-      `SELECT date_trunc('${trunc}', created_at) AS period, SUM(total_amount) AS revenue, COUNT(*) AS transactions
+      `SELECT date_trunc('${trunc}', created_at AT TIME ZONE 'Africa/Nairobi') AS period, SUM(total_amount) AS revenue, COUNT(*) AS transactions
        FROM transactions
        GROUP BY period ORDER BY period DESC LIMIT 30`
     );

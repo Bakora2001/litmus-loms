@@ -308,6 +308,20 @@ CREATE TABLE IF NOT EXISTS branding_jobs (
 ALTER TABLE branding_jobs ADD COLUMN IF NOT EXISTS due_date DATE;
 ALTER TABLE branding_jobs ADD COLUMN IF NOT EXISTS notes TEXT;
 
+-- Add items JSONB column to expenses table (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='expenses' AND column_name='items') THEN
+    ALTER TABLE expenses ADD COLUMN items JSONB DEFAULT '[]';
+  END IF;
+END $$;
+
+-- Add expense_categories array to settings table (idempotent)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='settings' AND column_name='expense_categories') THEN
+    ALTER TABLE settings ADD COLUMN expense_categories TEXT[] DEFAULT '{}';
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------
 -- SETTINGS (single row business profile)
 -- ---------------------------------------------------------

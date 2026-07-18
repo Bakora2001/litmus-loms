@@ -324,6 +324,7 @@ router.get(
     doc.text(`KES ${Number(invoice.total).toFixed(2)}`, summaryX + 105, endOfTableY + 50, { align: 'right', width: 110 });
 
     // 7. Footer bar
+    doc.page.margins.bottom = 0;
     doc.rect(0, 842 - 25, 595, 25).fill('#C1121F');
     doc.fillColor('#FFFFFF').fontSize(7).font('Helvetica-Bold').text('Powered by Litmus Tech Solutions', 40, 842 - 16);
     doc.text('Facebook  |  Twitter  |  WhatsApp', 400, 842 - 16, { align: 'right', width: 155 });

@@ -15,16 +15,38 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { description, category, amount, spent_at, recorded_by } = req.body;
+    const { description, category, amount, spent_at, recorded_by, items = [] } = req.body;
     if (!description || !amount) {
       return res.status(400).json({ message: 'description and amount are required.' });
     }
     const { rows } = await pool.query(
-      `INSERT INTO expenses (description, category, amount, spent_at, recorded_by)
-       VALUES ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5) RETURNING *`,
-      [description, category, amount, spent_at, recorded_by || null]
+      `INSERT INTO expenses (description, category, amount, spent_at, recorded_by, items)
+       VALUES ($1,$2,$3,COALESCE($4, CURRENT_DATE),$5,$6) RETURNING *`,
+      [description, category, amount, spent_at, recorded_by || null, JSON.stringify(items)]
     );
     res.status(201).json(rows[0]);
+  })
+);
+
+router.put(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const { description, category, amount, spent_at, items = [] } = req.body;
+    if (!description || !amount) {
+      return res.status(400).json({ message: 'description and amount are required.' });
+    }
+    const { rows } = await pool.query(
+      `UPDATE expenses SET
+         description = $1,
+         category = $2,
+         amount = $3,
+         spent_at = COALESCE($4, spent_at),
+         items = $5
+       WHERE id = $6 RETURNING *`,
+      [description, category, amount, spent_at, JSON.stringify(items), req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ message: 'Expense not found.' });
+    res.json(rows[0]);
   })
 );
 
