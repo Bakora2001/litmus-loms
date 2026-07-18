@@ -19,6 +19,7 @@ import Layout from '../components/Layout';
 import api from '../api/client';
 import { Invoice, Customer, Product } from '../types';
 import { formatMoney, formatDate, statusStyles } from '../utils/format';
+import litmusLogo from '../assets/litmus-logo.png';
 
 interface CustomItem {
   name: string;
@@ -78,9 +79,15 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false);
   const [prefix, setPrefix] = useState('INV-2026-');
 
+  // Document Type state
+  const [docType, setDocType] = useState<'invoice' | 'quotation'>('invoice');
+
+  // Editing state for invoices/quotations
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   // Load backend details
-  function load() {
-    api.get('/invoices').then((res) => {
+  function load(typeFilter: 'invoice' | 'quotation' = docType) {
+    api.get('/invoices', { params: { type: typeFilter } }).then((res) => {
       setInvoices(res.data);
     });
     api.get('/customers').then((res) => setCustomers(res.data));
@@ -88,7 +95,7 @@ export default function Invoices() {
   }
 
   useEffect(() => {
-    load();
+    load(docType);
     // Get invoice settings for prefix
     api.get('/settings').then((res) => {
       if (res.data) {
@@ -100,7 +107,7 @@ export default function Invoices() {
         }
       }
     }).catch(() => {});
-  }, []);
+  }, [docType]);
 
   // Update dynamic invoice number preview based on list length
   useEffect(() => {
@@ -200,12 +207,19 @@ export default function Invoices() {
         vat_rate: taxRate,
         terms: termsConds,
         status: status,
+        type: docType,
       };
 
-      const res = await api.post('/invoices', payload);
+      let res;
+      if (editingId) {
+        res = await api.put(`/invoices/${editingId}`, payload);
+      } else {
+        res = await api.post('/invoices', payload);
+      }
       
       // Reset & go back
       setView('list');
+      setEditingId(null);
       load();
       // Clear fields
       setCustomerId('');
@@ -226,21 +240,34 @@ export default function Invoices() {
       }
     } catch (err: any) {
       console.error(err);
-      alert(err?.response?.data?.message || 'Failed to create invoice.');
+      alert(err?.response?.data?.message || `Failed to ${editingId ? 'update' : 'create'} ${docType}.`);
     } finally {
       setSaving(false);
     }
   }
 
   async function downloadPdf(inv: Invoice) {
-    const res = await api.get(`/invoices/${inv.id}/pdf`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `${inv.invoice_number}.pdf`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+    try {
+      const res = await api.get(`/invoices/${inv.id}/pdf`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      // Open in new tab so browser PDF viewer renders it
+      const win = window.open(url, '_blank');
+      if (!win) {
+        // Fallback: force download if popup blocked
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${inv.invoice_number}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      // Revoke after a delay so the new tab can load the blob
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      console.error('PDF download failed:', err);
+      alert('Failed to download PDF. Please try again.');
+    }
   }
 
   // Filtered products list
@@ -251,12 +278,32 @@ export default function Invoices() {
   );
 
   return (
-    <Layout title={view === 'list' ? 'Invoices' : undefined}>
+    <Layout title={view === 'list' ? (docType === 'invoice' ? 'Invoices' : 'Quotations') : undefined}>
       {view === 'list' ? (
         <>
-          <div className="flex justify-end mb-5">
-            <button onClick={() => setView('create')} className="btn-primary flex items-center gap-2">
-              <Plus size={16} /> Create Invoice
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+              <button
+                type="button"
+                onClick={() => { setDocType('invoice'); setView('list'); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${docType === 'invoice' ? 'bg-white text-litmus-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Invoices
+              </button>
+              <button
+                type="button"
+                onClick={() => { setDocType('quotation'); setView('list'); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${docType === 'quotation' ? 'bg-white text-litmus-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Quotations
+              </button>
+            </div>
+            <button 
+              type="button"
+              onClick={() => { setView('create'); setEditingId(null); }} 
+              className="btn-primary flex items-center gap-2 shadow-soft"
+            >
+              <Plus size={16} /> Create {docType === 'invoice' ? 'Invoice' : 'Quotation'}
             </button>
           </div>
 
@@ -264,7 +311,7 @@ export default function Invoices() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-400 uppercase border-b border-gray-100">
-                  <th className="px-5 py-3 font-medium">Invoice #</th>
+                  <th className="px-5 py-3 font-medium">{docType === 'invoice' ? 'Invoice #' : 'Quotation #'}</th>
                   <th className="px-5 py-3 font-medium">Customer</th>
                   <th className="px-5 py-3 font-medium">Date</th>
                   <th className="px-5 py-3 font-medium">Total</th>
@@ -323,7 +370,7 @@ export default function Invoices() {
                 {invoices.length === 0 && (
                   <tr>
                     <td colSpan={6} className="text-center text-gray-400 py-10">
-                      No invoices yet.
+                      No {docType === 'invoice' ? 'invoices' : 'quotations'} yet.
                     </td>
                   </tr>
                 )}
@@ -338,13 +385,13 @@ export default function Invoices() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               <span className="cursor-pointer hover:text-litmus-red transition" onClick={() => setView('list')}>
-                Invoices
+                {docType === 'invoice' ? 'Invoices' : 'Quotations'}
               </span>
               <span>&gt;</span>
-              <span className="text-gray-600 font-medium">Create Invoice</span>
+              <span className="text-gray-600 font-medium">Create {docType === 'invoice' ? 'Invoice' : 'Quotation'}</span>
             </div>
-            <h1 className="text-2xl font-extrabold text-litmus-black mt-1">Create Invoice</h1>
-            <p className="text-gray-400 text-sm">Generate a new invoice for your customer</p>
+            <h1 className="text-2xl font-extrabold text-litmus-black mt-1">Create {docType === 'invoice' ? 'Invoice' : 'Quotation'}</h1>
+            <p className="text-gray-400 text-sm">Generate a new {docType === 'invoice' ? 'invoice' : 'quotation'} for your customer</p>
           </div>
 
           <div className="space-y-6">
@@ -867,7 +914,7 @@ export default function Invoices() {
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
               <div className="flex items-center gap-3">
                 <div>
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">Invoice Preview</h3>
+                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide">{(previewInvoice as any)?.type === 'quotation' || docType === 'quotation' ? 'Quotation Preview' : 'Invoice Preview'}</h3>
                   {previewInvoice && (
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-sm font-extrabold text-litmus-black">{previewInvoice.invoice_number}</span>
@@ -920,18 +967,42 @@ export default function Invoices() {
                 {/* Red stripe header */}
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-litmus-red" />
                 
+                {/* Diagonal watermark */}
+                <div
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                  style={{ zIndex: 0 }}
+                  aria-hidden
+                >
+                  <div
+                    style={{
+                      transform: 'rotate(-35deg)',
+                      fontSize: '52px',
+                      fontWeight: 900,
+                      color: 'rgba(193,18,31,0.055)',
+                      whiteSpace: 'nowrap',
+                      letterSpacing: '0.08em',
+                      userSelect: 'none',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    LITMUS SOLUTIONS
+                  </div>
+                </div>
+
                 {/* INVOICE banner */}
-                <div className="absolute top-0 right-8 bg-litmus-red text-white py-2.5 px-5 font-bold text-center rounded-b-md shadow-sm">
-                  <div className="text-[7px] uppercase tracking-wider opacity-90">Invoice</div>
-                  <div className="text-[10px] font-extrabold">{invoiceNumber || 'INV-2026-000'}</div>
+                <div className="absolute top-0 right-8 bg-litmus-red text-white py-2.5 px-5 font-bold text-center rounded-b-md shadow-sm" style={{ zIndex: 1 }}>
+                  <div className="text-[7px] uppercase tracking-wider opacity-90">{docType === 'quotation' ? 'Quotation' : 'Invoice'}</div>
+                  <div className="text-[10px] font-extrabold">{invoiceNumber || (docType === 'quotation' ? 'QTN-2026-000' : 'INV-2026-000')}</div>
                 </div>
 
                 {/* Company details */}
-                <div className="flex items-start gap-2.5 mt-5 mb-6">
-                  {/* Small logo placeholder */}
-                  <div className="w-9 h-9 rounded bg-litmus-black border border-litmus-red flex items-center justify-center shrink-0">
-                    <span className="text-litmus-red font-extrabold text-lg">L</span>
-                  </div>
+                <div className="flex items-start gap-2.5 mt-5 mb-6" style={{ position: 'relative', zIndex: 1 }}>
+                  <img
+                    src={litmusLogo}
+                    alt="Litmus Logo"
+                    className="w-9 h-9 object-contain rounded border border-gray-100 shrink-0"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
                   <div>
                     <h4 className="text-xs font-bold text-gray-900 leading-none">Litmus Solutions</h4>
                     <p className="text-[8px] text-gray-400 mt-1">Cyber Services &amp; Laptop Store</p>
@@ -1103,7 +1174,86 @@ export default function Invoices() {
                   </span>
                 ) : 'Preview Mode'}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {previewInvoice && (previewInvoice as any).type === 'quotation' && (() => {
+                  const phone = (previewInvoice.customer_phone || manualCustomerPhone || '').replace(/\D/g, '');
+                  const name = previewInvoice.customer_name || manualCustomerName || 'Valued Customer';
+                  const amount = formatMoney(previewInvoice.total);
+                  const num = previewInvoice.invoice_number;
+                  const msg = encodeURIComponent(
+                    `Hello ${name},\n\nPlease find attached your Quotation *${num}* for *${amount}*.\n\nKindly review and confirm to proceed.\n\nRegards,\nLitmus Tech Solutions\n+254 723 005 182`
+                  );
+                  const waLink = `https://wa.me/${phone.startsWith('0') ? '254' + phone.slice(1) : phone}?text=${msg}`;
+                  return (
+                    <a
+                      href={waLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition flex items-center gap-1.5"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                      Share via WhatsApp
+                    </a>
+                  );
+                })()}
+                {previewInvoice && (previewInvoice as any).type === 'quotation' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (window.confirm('Are you sure you want to convert this quotation to an invoice?')) {
+                        try {
+                          await api.post(`/invoices/${previewInvoice.id}/convert-to-invoice`);
+                          alert('Converted to Invoice successfully! Re-routing to invoices list.');
+                          setDocType('invoice');
+                          setShowPreviewModal(false);
+                          setPreviewInvoice(null);
+                          load('invoice');
+                        } catch (err: any) {
+                          alert(err?.response?.data?.message || 'Conversion failed.');
+                        }
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 text-xs font-semibold px-4 py-2 rounded-lg transition"
+                  >
+                    Convert to Invoice
+                  </button>
+                )}
+                {previewInvoice && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(previewInvoice.id);
+                      setInvoiceNumber(previewInvoice.invoice_number);
+                      setInvoiceDate(previewInvoice.issue_date.split('T')[0]);
+                      setDueDate(previewInvoice.due_date ? previewInvoice.due_date.split('T')[0] : '');
+                      setNotes(previewInvoice.terms || '');
+                      setTermsConds(previewInvoice.terms || '');
+                      setItems(previewInvoice.items.map(it => ({
+                        name: it.name,
+                        description: (it as any).description || '',
+                        qty: it.qty,
+                        price: it.price,
+                        discount: (it as any).discount || 0,
+                        tax: (it as any).tax || 0
+                      })));
+                      setDiscountVal(previewInvoice.discount);
+                      setCustomerId(previewInvoice.customer_id || '');
+                      setIsManualCustomer(false);
+                      setView('create');
+                      setShowPreviewModal(false);
+                    }}
+                    className="border border-gray-200 text-gray-650 bg-white hover:bg-gray-50 text-xs font-semibold px-4 py-2 rounded-lg transition"
+                  >
+                    Edit
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="border border-gray-200 text-gray-650 bg-white hover:bg-gray-50 text-xs font-semibold px-4 py-2 rounded-lg transition"
+                >
+                  🖨️ Print
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1176,15 +1326,15 @@ export default function Invoices() {
     </div>
   </div>
   <div>
-    <div class="invoice-pill">INVOICE</div>
+    <div class="invoice-pill">${(inv as any)?.type === 'quotation' ? 'QUOTATION' : 'INVOICE'}</div>
   </div>
   <div class="invoice-date">
-    Date: ${invoiceDate ? invoiceDate.replace(/-/g, ' . ') : ' . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .'}
+    ${(inv as any)?.type === 'quotation' ? 'Quotation' : 'Invoice'} Date: ${invoiceDate ? invoiceDate.replace(/-/g, ' . ') : ' . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .'}
   </div>
 </div>
 
 <div class="table-container">
-  <div class="watermark">Litmus Tech Solutions</div>
+  <div class="watermark">${(inv as any)?.type === 'quotation' ? 'QUOTATION ONLY' : 'Litmus Tech Solutions'}</div>
   <table class="invoice-table">
     <thead>
       <tr>

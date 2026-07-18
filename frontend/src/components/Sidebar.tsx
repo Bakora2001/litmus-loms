@@ -14,10 +14,11 @@ import {
   BarChart2,
   Receipt,
   Settings as SettingsIcon,
+  Palette,
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import Logo from './Logo';
+import litmusLogo from '../assets/litmus-logo.png';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -32,6 +33,7 @@ const navItems = [
   { to: '/computer-store', label: 'Computer Store', icon: ShoppingBag, permission: 'inventory' },
   { to: '/inventory', label: 'Inventory', icon: Boxes, permission: 'inventory' },
   { to: '/invoices', label: 'Invoices', icon: FileText, permission: 'invoices' },
+  { to: '/branding', label: 'Branding Services', icon: Palette, permission: undefined },
   { to: '/sales', label: 'Sales', icon: BarChart2, permission: 'reports' },
   { to: '/debt-tracker', label: 'Debt Tracker', icon: Wallet, permission: 'debt_tracker' },
   { to: '/bulk-sms', label: 'Bulk SMS', icon: MessageSquareText, permission: 'sms' },
@@ -59,8 +61,12 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } h-screen shrink-0`}
     >
-      <div className="px-5 py-5 border-b border-white/10 flex items-center justify-between">
-        <Logo variant="dark" showTagline size="sm" />
+      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <img
+          src={litmusLogo}
+          className="h-12 max-h-12 object-contain"
+          alt="Litmus Logo"
+        />
         <button
           onClick={onClose}
           className="md:hidden p-1 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition"

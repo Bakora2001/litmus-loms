@@ -14,6 +14,7 @@ import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import Sales from './pages/Sales';
+import BrandingServices from './pages/BrandingServices';
 import ProtectedRoute from './components/ProtectedRoute';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+      <Route path="/branding" element={<ProtectedRoute><BrandingServices /></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
     </Routes>
   );

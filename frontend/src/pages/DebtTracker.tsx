@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Wallet, ChevronRight, History, ChevronDown, ChevronUp, Download, X } from 'lucide-react';
+import { Wallet, ChevronRight, History, ChevronDown, ChevronUp, Download, X, Calendar, RefreshCw } from 'lucide-react';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
 import api from '../api/client';
@@ -14,6 +14,43 @@ interface DebtSummary {
   earliest_due_date: string | null;
 }
 
+type Period = 'today' | 'week' | 'month' | 'last_month' | 'custom';
+
+function getPeriodDates(period: Period, customFrom: string, customTo: string): { from: string; to: string } {
+  const now = new Date();
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+
+  if (period === 'today') {
+    const t = toISO(now);
+    return { from: t, to: t };
+  }
+  if (period === 'week') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    return { from: toISO(start), to: toISO(now) };
+  }
+  if (period === 'month') {
+    return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: toISO(now) };
+  }
+  if (period === 'last_month') {
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: toISO(first), to: toISO(last) };
+  }
+  if (period === 'custom' && customFrom && customTo) {
+    return { from: customFrom, to: customTo };
+  }
+  return { from: '', to: '' };
+}
+
+const PERIODS: { key: Period; label: string }[] = [
+  { key: 'today',      label: 'Today' },
+  { key: 'week',       label: 'This Week' },
+  { key: 'month',      label: 'This Month' },
+  { key: 'last_month', label: 'Last Month' },
+  { key: 'custom',     label: 'Custom Range' },
+];
+
 export default function DebtTracker() {
   const [debts, setDebts] = useState<DebtSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,13 +60,22 @@ export default function DebtTracker() {
   const [paying, setPaying] = useState<string | null>(null);
   const [paymentHistories, setPaymentHistories] = useState<Record<string, any[]>>({});
   const [expandedHistories, setExpandedHistories] = useState<Record<string, boolean>>({});
+  const [period, setPeriod] = useState<Period>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   function load() {
     setLoading(true);
-    api.get('/transactions/debts/summary').then((res) => setDebts(res.data)).finally(() => setLoading(false));
+    const { from, to } = getPeriodDates(period, customFrom, customTo);
+    const params: Record<string, string> = {};
+    if (from) params.from = `${from}T00:00:00.000Z`;
+    if (to)   params.to   = `${to}T23:59:59.999Z`;
+    api.get('/transactions/debts/summary', { params })
+      .then((res) => setDebts(res.data))
+      .finally(() => setLoading(false));
   }
 
-  useEffect(load, []);
+  useEffect(load, [period, customFrom, customTo]);
 
   async function openCustomer(d: DebtSummary) {
     setSelected(d);
@@ -37,10 +83,8 @@ export default function DebtTracker() {
     setExpandedHistories({});
     const pending = await api.get('/transactions', { params: { customer_id: d.customer_id, status: 'pending' } });
     const partial = await api.get('/transactions', { params: { customer_id: d.customer_id, status: 'partial' } });
-    // For each item, eagerly load payment history so it shows in the breakdown
     const allItems = [...pending.data, ...partial.data];
     setItems(allItems);
-    // Load all payment histories upfront for the PDF/breakdown
     const histories: Record<string, any[]> = {};
     await Promise.all(
       allItems.map(async (it: any) => {
@@ -70,19 +114,14 @@ export default function DebtTracker() {
 
   async function receivePayment(txId: string, full: boolean, balance: number) {
     const amount = full ? balance : Number(payAmount[txId] || 0);
-    
-    // Validation: Check if amount is valid
     if (!amount || amount <= 0) {
       alert('Please enter a valid payment amount greater than zero.');
       return;
     }
-    
-    // Validation: Check if payment exceeds balance
     if (amount > balance) {
-      alert(`Payment amount (${formatMoney(amount)}) cannot exceed the remaining balance (${formatMoney(balance)}). Please enter a valid amount.`);
+      alert(`Payment amount (${formatMoney(amount)}) cannot exceed the remaining balance (${formatMoney(balance)}).`);
       return;
     }
-    
     setPaying(txId);
     try {
       await api.post(`/transactions/${txId}/payments`, { amount, method: 'cash' });
@@ -90,7 +129,6 @@ export default function DebtTracker() {
       setPaymentHistories((prev) => ({ ...prev, [txId]: data }));
       if (selected) await openCustomer(selected);
       load();
-      // Clear the input field after successful payment
       setPayAmount((prev) => ({ ...prev, [txId]: '' }));
     } catch (error: any) {
       alert(error.response?.data?.message || 'Failed to record payment. Please try again.');
@@ -118,132 +156,103 @@ export default function DebtTracker() {
   .contact-bar { background: #fff; border-top: 3px solid #C1121F; border-bottom: 3px solid #C1121F; text-align: center; padding: 6px 0; font-size: 9px; font-weight: bold; }
   .section-title { font-size: 13px; font-weight: bold; border-bottom: 2px solid #C1121F; padding-bottom: 4px; margin: 16px 0 8px; }
   .client-row { display: flex; justify-content: space-between; margin-bottom: 20px; }
-  .client-box { width: 48%; }
-  .client-label { font-size: 11px; font-weight: bold; text-decoration: underline; margin-bottom: 4px; }
-  .summary-box { background: #f8f8f8; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-  .summary-item label { display: block; font-size: 9px; color: #666; text-transform: uppercase; font-weight: bold; }
-  .summary-item .val { font-size: 14px; font-weight: 900; }
-  .val-red { color: #C1121F; }
-  .val-green { color: #059669; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  th { background: #000; color: #fff; font-size: 10px; font-weight: bold; padding: 8px; text-align: left; border-right: 1px solid #333; }
-  th:last-child { border-right: none; }
-  td { padding: 8px 8px; font-size: 10px; border-bottom: 1px solid #e5e5e5; border-right: 1px solid #e5e5e5; }
-  td:last-child { border-right: none; }
-  .payment-row td { background: #f0fdf4; }
-  .tx-header { background: #fef9f9; font-weight: bold; }
-  .no-payments { color: #999; font-style: italic; font-size: 10px; padding: 6px 8px; }
-  .footer { margin-top: 30px; border-top: 2px solid #C1121F; padding-top: 12px; font-size: 9px; color: #666; text-align: center; }
-  @media print { body { margin: 15px; } }
+  .client-box { background: #f5f5f5; border-radius: 6px; padding: 10px 14px; font-size: 11px; flex: 1; margin-right: 12px; }
+  .client-box:last-child { margin-right: 0; }
+  .client-box strong { display: block; font-size: 13px; margin-bottom: 4px; }
+  .tx-block { border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 16px; overflow: hidden; }
+  .tx-title { background: #1a1a1a; color: #fff; padding: 8px 12px; font-weight: bold; display: flex; justify-content: space-between; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #000; color: #fff; font-size: 9px; font-weight: bold; padding: 7px 10px; text-align: left; }
+  td { padding: 7px 10px; font-size: 10px; border-bottom: 1px solid #f0f0f0; }
+  .tx-header td { background: #fafafa; font-weight: bold; }
+  .payment-row td { font-size: 9px; }
+  .no-payments { text-align: center; color: #999; padding: 12px; font-style: italic; }
+  .footer { margin-top: 20px; border-top: 2px solid #C1121F; padding-top: 10px; font-size: 8px; color: #888; text-align: center; }
+  @media print { body { margin: 10px; } }
 </style></head>
 <body>
 <div class="header-container">
   <div class="header-logo-row">
-    <div class="logo-circle">
-      <img src="/logo.png" onerror="this.style.display='none'" />
-    </div>
+    <div class="logo-circle"><img src="/logo.png" onerror="this.style.display='none'" /></div>
     <div>
       <div class="company-title">Litmus Tech Solutions</div>
-      <div style="font-size:9px;opacity:0.7">Debt Tracker Report</div>
+      <div style="font-size:9px;opacity:0.7">Debt Statement &amp; Payment History</div>
     </div>
   </div>
   <div class="contact-bar">Tel: +254 723 005 182 | 0706 085 261 | Email: info@litmussolution.co.ke | www.litmussolution.co.ke</div>
 </div>
 
+<div class="section-title">Client Debt Statement</div>
 <div class="client-row">
   <div class="client-box">
-    <div class="client-label">Client Details</div>
-    <div><strong>Name:</strong> ${customer.name || 'Unnamed Customer'}</div>
-    <div><strong>Phone:</strong> ${customer.phone}</div>
-    <div><strong>Open Items:</strong> ${customer.open_items}</div>
+    <strong>${customer.name || 'Unnamed Customer'}</strong>
+    Phone: ${customer.phone}<br>
+    Open Transactions: ${customer.open_items}
   </div>
   <div class="client-box" style="text-align:right">
-    <div class="client-label">Report Details</div>
-    <div><strong>Date:</strong> ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
-    <div><strong>Time:</strong> ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
-    <div style="margin-top:6px;display:inline-block;background:#C1121F;color:#fff;padding:3px 12px;border-radius:4px;font-weight:bold">DEBT STATEMENT</div>
+    <strong style="color:#C1121F;font-size:20px">KES ${Number(totalBalance).toLocaleString()}</strong>
+    Total Outstanding Balance<br>
+    <span style="color:#059669">Paid So Far: KES ${totalPaid.toLocaleString()}</span><br>
+    Generated: ${new Date().toLocaleDateString('en-GB')}
   </div>
 </div>
 
-<div class="summary-box">
-  <div class="summary-item">
-    <label>Total Charged</label>
-    <div class="val">${formatMoney(items.reduce((s, it) => s + Number(it.total_amount), 0))}</div>
-  </div>
-  <div class="summary-item">
-    <label>Total Paid</label>
-    <div class="val val-green">${formatMoney(totalPaid)}</div>
-  </div>
-  <div class="summary-item">
-    <label>Balance Remaining</label>
-    <div class="val val-red">${formatMoney(totalBalance)}</div>
-  </div>
-</div>
-
-<div class="section-title">Transaction Breakdown</div>
-
-${items.map(it => {
+${items.map((it: any) => {
   const payments = paymentHistories[it.id] || [];
   const totalTxPaid = payments.reduce((s: number, p: any) => s + Number(p.amount), 0);
-  return `
-<table>
-  <thead>
-    <tr>
-      <th colspan="4" style="background:#1a1a1a">
-        ${it.description} &nbsp;|&nbsp; Date: ${new Date(it.created_at).toLocaleDateString('en-GB')}
-        &nbsp;|&nbsp; Status: ${it.status.toUpperCase()}
-      </th>
-    </tr>
-    <tr style="background:#333">
-      <th>Total Charged</th><th>Total Paid</th><th>Balance</th><th>Due Date</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr class="tx-header">
-      <td>${formatMoney(it.total_amount)}</td>
-      <td style="color:#059669">${formatMoney(it.amount_paid)}</td>
-      <td style="color:#C1121F;font-weight:bold">${formatMoney(it.balance)}</td>
-      <td>${it.due_date ? new Date(it.due_date).toLocaleDateString('en-GB') : '—'}</td>
-    </tr>
-  </tbody>
-</table>
-
-<table style="margin-top:-1px;margin-bottom:16px">
-  <thead>
-    <tr>
-      <th>Payment Date &amp; Time</th>
-      <th>Amount Paid</th>
-      <th>Payment Method</th>
-      <th>Received By</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${payments.length === 0
-      ? `<tr><td colspan="4" class="no-payments">No payments recorded for this transaction yet.</td></tr>`
-      : payments.map((p: any) => `
-    <tr class="payment-row">
-      <td>${new Date(p.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-      <td style="color:#059669;font-weight:bold">${formatMoney(p.amount)}</td>
-      <td style="text-transform:capitalize">${p.method || 'cash'}</td>
-      <td>${p.received_by_name || '—'}</td>
-    </tr>`).join('')}
-    ${payments.length > 0 ? `
-    <tr style="background:#f0fdf4;font-weight:bold;border-top:2px solid #d1fae5">
-      <td>Subtotal Paid (this transaction)</td>
-      <td style="color:#059669">${formatMoney(totalTxPaid)}</td>
-      <td colspan="2"></td>
-    </tr>` : ''}
-  </tbody>
-</table>`;
+  return '<div class="tx-block">' +
+    '<div class="tx-title">' +
+      '<span>' + (it.description || 'Transaction') + '</span>' +
+      '<span style="font-size:9px;opacity:0.7">' + new Date(it.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + '</span>' +
+    '</div>' +
+    '<table>' +
+      '<thead><tr>' +
+        '<th>Total Amount</th><th>Amount Paid</th><th>Balance Remaining</th><th>Due Date</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+        '<tr class="tx-header">' +
+          '<td>KES ' + Number(it.total_amount).toLocaleString() + '</td>' +
+          '<td style="color:#059669">KES ' + Number(it.amount_paid).toLocaleString() + '</td>' +
+          '<td style="color:#C1121F;font-weight:bold">KES ' + Number(it.balance).toLocaleString() + '</td>' +
+          '<td>' + (it.due_date ? new Date(it.due_date).toLocaleDateString('en-GB') : '&mdash;') + '</td>' +
+        '</tr>' +
+      '</tbody>' +
+    '</table>' +
+    '<table style="margin-top:-1px;margin-bottom:16px">' +
+      '<thead><tr>' +
+        '<th>Payment Date &amp; Time</th><th>Amount Paid</th><th>Method</th><th>Received By</th>' +
+      '</tr></thead>' +
+      '<tbody>' +
+      (payments.length === 0
+        ? '<tr><td colspan="4" class="no-payments">No payments recorded for this transaction yet.</td></tr>'
+        : payments.map((p: any) =>
+            '<tr class="payment-row">' +
+              '<td>' + new Date(p.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + '</td>' +
+              '<td style="color:#059669;font-weight:bold">KES ' + Number(p.amount).toLocaleString() + '</td>' +
+              '<td style="text-transform:capitalize">' + (p.method || 'cash') + '</td>' +
+              '<td>' + (p.received_by_name || '&mdash;') + '</td>' +
+            '</tr>'
+          ).join('')
+      ) +
+      (payments.length > 0
+        ? '<tr style="background:#f0fdf4;font-weight:bold;border-top:2px solid #d1fae5">' +
+            '<td>Subtotal Paid (this transaction)</td>' +
+            '<td style="color:#059669">KES ' + totalTxPaid.toLocaleString() + '</td>' +
+            '<td colspan="2"></td>' +
+          '</tr>'
+        : '') +
+      '</tbody>' +
+    '</table>' +
+    '</div>';
 }).join('')}
 
 <div style="margin-top:20px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:12px;display:flex;justify-content:space-between;align-items:center">
   <div style="font-weight:bold;font-size:13px">TOTAL OUTSTANDING BALANCE</div>
-  <div style="font-size:18px;font-weight:900;color:#C1121F">${formatMoney(totalBalance)}</div>
+  <div style="font-size:18px;font-weight:900;color:#C1121F">KES ${Number(totalBalance).toLocaleString()}</div>
 </div>
 
 <div class="footer">
-  <div style="margin-bottom:4px">• Internet installation • Computer sales &amp; repair • Software installation • ICT consultancy • Website design • Graphic design • Printing &amp; scanning • Cyber services</div>
+  <div style="margin-bottom:4px">&bull; Internet installation &bull; Computer sales &amp; repair &bull; Software installation &bull; ICT consultancy &bull; Website design &bull; Graphic design &bull; Printing &amp; scanning &bull; Cyber services</div>
   <div>Generated by Litmus LOMS &bull; ${new Date().toLocaleString('en-GB')} &bull; Confidential Debt Statement</div>
 </div>
 </body></html>`;
@@ -262,6 +271,49 @@ ${items.map(it => {
 
   return (
     <Layout title="Debt Tracker" subtitle="Nothing gets forgotten. Every shilling tracked with full payment history & downloadable debt statements.">
+
+      {/* Period filter */}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          {PERIODS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => setPeriod(p.key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${period === p.key ? 'bg-white text-litmus-red shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {period === 'custom' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              className="input-field text-xs py-1.5"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
+            <span className="text-gray-400 text-xs">to</span>
+            <input
+              type="date"
+              className="input-field text-xs py-1.5"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
+          </div>
+        )}
+
+        <button
+          onClick={load}
+          className="w-8 h-8 rounded-lg border border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:text-litmus-red hover:border-litmus-red/40 transition ml-auto"
+          title="Refresh"
+        >
+          <RefreshCw size={14} />
+        </button>
+      </div>
+
       {/* Summary banner */}
       <div className="card mb-5 p-5 flex flex-wrap items-center gap-4">
         <div className="w-12 h-12 rounded-xl2 bg-red-50 flex items-center justify-center shrink-0">
@@ -283,24 +335,52 @@ ${items.map(it => {
                 <th className="px-5 py-3 font-medium">Open Items</th>
                 <th className="px-5 py-3 font-medium">Earliest Due</th>
                 <th className="px-5 py-3 font-medium">Balance</th>
+                <th className="px-5 py-3 font-medium text-center">Reminder</th>
                 <th className="px-5 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
-              {debts.map((d) => (
-                <tr key={d.customer_id} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer" onClick={() => openCustomer(d)}>
-                  <td className="px-5 py-3.5">
-                    <div className="font-medium text-litmus-black">{d.name || 'Unnamed'}</div>
-                    <div className="text-xs text-gray-400">{d.phone}</div>
-                  </td>
-                  <td className="px-5 py-3.5 text-gray-500">{d.open_items}</td>
-                  <td className="px-5 py-3.5 text-gray-500">{formatDate(d.earliest_due_date)}</td>
-                  <td className="px-5 py-3.5 font-semibold text-litmus-red">{formatMoney(d.total_balance)}</td>
-                  <td className="px-5 py-3.5 text-right"><ChevronRight size={16} className="text-gray-300 inline" /></td>
-                </tr>
-              ))}
+              {loading ? (
+                <tr><td colSpan={6} className="text-center text-gray-400 py-10">Loading debts…</td></tr>
+              ) : debts.map((d) => {
+                const rawPhone = d.phone.replace(/\D/g, '');
+                const wa = rawPhone.startsWith('0') ? '254' + rawPhone.slice(1) : rawPhone;
+                const name = d.name || 'Valued Customer';
+                const balance = formatMoney(d.total_balance);
+                const pendingCount = d.open_items;
+                const msg = encodeURIComponent(
+                  `Good day ${name},\n\nThis is a polite reminder from *Litmus Tech Solutions* that you have an outstanding balance of *${balance}* across ${pendingCount} unpaid transaction${pendingCount !== '1' ? 's' : ''}.\n\nKindly make your payment at your earliest convenience to avoid any inconvenience.\n\nThank you for your business! 🙏\n\nLitmus Tech Solutions\nTel: +254 723 005 182`
+                );
+
+                return (
+                  <tr key={d.customer_id} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer" onClick={() => openCustomer(d)}>
+                    <td className="px-5 py-3.5">
+                      <div className="font-medium text-litmus-black">{d.name || 'Unnamed'}</div>
+                      <div className="text-xs text-gray-400">{d.phone}</div>
+                    </td>
+                    <td className="px-5 py-3.5 text-gray-500">{d.open_items}</td>
+                    <td className="px-5 py-3.5 text-gray-500">{formatDate(d.earliest_due_date)}</td>
+                    <td className="px-5 py-3.5 font-semibold text-litmus-red">{formatMoney(d.total_balance)}</td>
+                    <td className="px-5 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      {d.phone ? (
+                        <a
+                          href={`https://wa.me/${wa}?text=${msg}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition"
+                          title="Quick Send WhatsApp Reminder"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                          Send
+                        </a>
+                      ) : '—'}
+                    </td>
+                    <td className="px-5 py-3.5 text-right"><ChevronRight size={16} className="text-gray-300 inline" /></td>
+                  </tr>
+                );
+              })}
               {!loading && debts.length === 0 && (
-                <tr><td colSpan={5} className="text-center text-gray-400 py-10">No outstanding debts. Great job! 🎉</td></tr>
+                <tr><td colSpan={6} className="text-center text-gray-400 py-10">No outstanding debts for this period. 🎉</td></tr>
               )}
             </tbody>
           </table>
@@ -333,8 +413,29 @@ ${items.map(it => {
               </div>
             </div>
 
-            {/* Download Button */}
-            <div className="flex justify-end">
+            {/* Action Buttons */}
+            <div className="flex flex-wrap justify-end gap-2">
+              {selected.phone && (() => {
+                const rawPhone = selected.phone.replace(/\D/g, '');
+                const wa = rawPhone.startsWith('0') ? '254' + rawPhone.slice(1) : rawPhone;
+                const name = selected.name || 'Valued Customer';
+                const balance = formatMoney(selected.total_balance);
+                const pendingCount = items.length;
+                const msg = encodeURIComponent(
+                  `Good day ${name},\n\nThis is a polite reminder from *Litmus Tech Solutions* that you have an outstanding balance of *${balance}* across ${pendingCount} unpaid transaction${pendingCount !== 1 ? 's' : ''}.\n\nKindly make your payment at your earliest convenience to avoid any inconvenience.\n\nThank you for your continued business! 🙏\n\nLitmus Tech Solutions\nTel: +254 723 005 182`
+                );
+                return (
+                  <a
+                    href={`https://wa.me/${wa}?text=${msg}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-4 py-2 rounded-lg transition"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+                    Send WhatsApp Reminder
+                  </a>
+                );
+              })()}
               <button
                 onClick={() => downloadDebtReport(selected)}
                 className="btn-primary text-xs flex items-center gap-1.5 py-2 px-4"
@@ -373,7 +474,7 @@ ${items.map(it => {
                   </div>
                 </div>
 
-                {/* Payment History - Always shown as a table */}
+                {/* Payment History */}
                 <div className="bg-white">
                   <button
                     type="button"

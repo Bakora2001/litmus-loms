@@ -82,16 +82,16 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Map database values, with sensible fallback mock values matching the screenshot exactly
+  // Map database values directly from API with 0 as fallback
   const displaySummary = {
-    todays_revenue: summary?.todays_revenue || 24500,
-    outstanding_debts: summary?.outstanding_debts || 67850,
-    debtor_customers: summary?.debtor_customers || 12,
-    pending_tasks: summary?.pending_tasks || 8,
-    high_priority_tasks: summary?.high_priority_tasks || 3,
-    completed_tasks_today: summary?.completed_tasks_today || 15,
-    todays_customers: summary?.todays_customers || 32,
-    low_stock_items: summary?.low_stock_items || 7,
+    todays_revenue: summary?.todays_revenue ?? 0,
+    outstanding_debts: summary?.outstanding_debts ?? 0,
+    debtor_customers: summary?.debtor_customers ?? 0,
+    pending_tasks: summary?.pending_tasks ?? 0,
+    high_priority_tasks: summary?.high_priority_tasks ?? 0,
+    completed_tasks_today: summary?.completed_tasks_today ?? 0,
+    todays_customers: summary?.todays_customers ?? 0,
+    low_stock_items: summary?.low_stock_items ?? 0,
   };
 
   const displayServices = topServices.length
@@ -236,7 +236,7 @@ export default function Dashboard() {
             {hasPermission('profits') && (
               <div
                 className="card flex flex-col justify-between p-4 bg-white hover:border-red-100 transition shadow-soft cursor-pointer hover:shadow-md hover:-translate-y-0.5"
-                onClick={() => navigate('/transactions')}
+                onClick={() => navigate('/sales?period=today')}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Today's Revenue</span>
@@ -339,7 +339,7 @@ export default function Dashboard() {
             {hasPermission('inventory') && (
               <div
                 className="card flex flex-col justify-between p-4 bg-white hover:border-red-100 transition shadow-soft cursor-pointer hover:shadow-md hover:-translate-y-0.5"
-                onClick={() => navigate('/inventory')}
+                onClick={() => navigate('/inventory?low_stock=true')}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Low Stock Items</span>

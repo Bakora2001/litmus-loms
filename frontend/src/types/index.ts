@@ -59,6 +59,7 @@ export interface Product {
   min_stock: number;
   warranty?: string;
   image_url?: string;
+  serial_number?: string;
   created_at: string;
   updated_at: string;
 }
